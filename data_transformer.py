@@ -33,31 +33,36 @@ class CorticoTransformer:
     def transform_facility(cortico_data: Dict) -> Dict:
         """Transform Cortico API data to NaviCare facility format"""
         
+        # Defensive: Ensure lists/dicts are not None
+        specialties = cortico_data.get('specialties') or []
+        workflows = cortico_data.get('workflows') or []
+        
         # Map facility type based on specialties and workflows
         facility_type = CorticoTransformer._determine_facility_type(
-            cortico_data.get('specialties', []),
-            cortico_data.get('workflows', [])
+            specialties,
+            workflows
         )
         
-        # Extract coordinates
-        coordinates = cortico_data.get('point', {}).get('coordinates', [None, None])
-        longitude, latitude = coordinates[0] if coordinates else None, coordinates[1] if coordinates else None
+        # Extract coordinates with None handling
+        point_data = cortico_data.get('point') or {}
+        coordinates = point_data.get('coordinates') or [None, None]
+        longitude = coordinates[0] if isinstance(coordinates, list) and len(coordinates) > 0 else None
+        latitude = coordinates[1] if isinstance(coordinates, list) and len(coordinates) > 1 else None
         
         # Generate slug from clinic name
-        slug = cortico_data.get('clinic_slug') or CorticoTransformer._generate_slug(
-            cortico_data.get('clinic_name', '')
-        )
+        clinic_name = cortico_data.get('clinic_name', '')
+        slug = cortico_data.get('clinic_slug') or CorticoTransformer._generate_slug(clinic_name)
         
         return {
-            'name': cortico_data.get('clinic_name', '').strip(),
+            'name': clinic_name.strip() if clinic_name else '',
             'slug': slug,
             'facility_type': facility_type,
             'website': cortico_data.get('website'),
             'email': cortico_data.get('email'),
             'phone': CorticoTransformer._clean_phone(cortico_data.get('phone_number')),
-            'address_line1': cortico_data.get('clinic_address'),
-            'city': cortico_data.get('clinic_city'),
-            'province': cortico_data.get('clinic_province'),
+            'address_line1': cortico_data.get('clinic_address', ''),
+            'city': cortico_data.get('clinic_city', ''),
+            'province': cortico_data.get('clinic_province', ''),
             'country': cortico_data.get('clinic_country', 'Canada'),
             'longitude': longitude,
             'latitude': latitude,
@@ -70,10 +75,11 @@ class CorticoTransformer:
     @staticmethod
     def transform_observation(facility_id: str, cortico_data: Dict) -> Dict:
         """Transform Cortico data to facility observation format"""
+        # No changes needed here, as it uses simple gets with defaults
         return {
             'facility_id': facility_id,
             'source': 'cortico',
-            'source_record_id': str(cortico_data.get('id')),
+            'source_record_id': str(cortico_data.get('id', '')),
             'booking_url': cortico_data.get('booking_url'),
             'host': cortico_data.get('host'),
             'accepts_new_patients': cortico_data.get('accepts_new_patients'),
@@ -117,9 +123,13 @@ class CorticoTransformer:
     @staticmethod
     def transform_service_offerings(facility_id: str, workflows: List[Dict]) -> List[Dict]:
         """Transform Cortico workflows to service offerings"""
+        # Defensive: Ensure workflows is a list
+        workflows = workflows or []
         offerings = []
         
         for workflow in workflows:
+            if not isinstance(workflow, dict):
+                continue  # Skip invalid workflow entries
             service_slug = CorticoTransformer.WORKFLOW_SERVICE_MAPPING.get(
                 workflow.get('slug', '')
             )
@@ -141,6 +151,8 @@ class CorticoTransformer:
     @staticmethod
     def transform_availability(facility_id: str, availability_data: Dict) -> List[Dict]:
         """Transform Cortico availability data to availability records"""
+        # Defensive: Ensure availability_data is a dict
+        availability_data = availability_data or {}
         availability_records = []
         
         for workflow_channel, next_available in availability_data.items():
@@ -170,7 +182,11 @@ class CorticoTransformer:
     @staticmethod
     def _determine_facility_type(specialties: List[str], workflows: List[Dict]) -> str:
         """Determine facility type based on specialties and workflows"""
-        specialties_str = ' '.join(specialties).lower()
+        # Defensive: Ensure inputs are iterables
+        specialties = specialties or []
+        workflows = workflows or []
+        
+        specialties_str = ' '.join(str(s).lower() for s in specialties if s is not None)
         
         # Check for specific facility types
         if 'emergency' in specialties_str:
@@ -191,8 +207,8 @@ class CorticoTransformer:
             return 'vision_center'
         
         # Check workflows for additional clues
-        workflow_types = [w.get('workflow_type', '') for w in workflows]
-        workflow_slugs = [w.get('slug', '') for w in workflows]
+        workflow_types = [w.get('workflow_type', '') for w in workflows if isinstance(w, dict)]
+        workflow_slugs = [w.get('slug', '') for w in workflows if isinstance(w, dict)]
         
         if 'terminal-walk-in' in workflow_types or 'terminal' in workflow_slugs:
             return 'walk_in_clinic'
