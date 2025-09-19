@@ -122,6 +122,55 @@ class SupabaseClient:
             logger.error(f"Error inserting observation: {e}")
             return False
 
+    async def get_specialty_by_name(self, name: str) -> Optional[Dict]:
+        """Get specialty by name, create if not exists"""
+        try:
+            # First try to find existing specialty
+            response = (
+                self.client.table("specialties")
+                .select("id, name")
+                .eq("name", name)
+                .limit(1)
+                .execute()
+            )
+            
+            if response.data:
+                return response.data[0]
+            
+            # If not found, create new specialty
+            response = (
+                self.client.table("specialties")
+                .insert({"name": name})
+                .execute()
+            )
+            
+            return response.data[0] if response.data else None
+            
+        except APIError as e:
+            logger.error(f"Error getting/creating specialty {name}: {e}")
+            return None
+
+    async def link_facility_specialties(self, facility_id: str, specialties: List[str]) -> bool:
+        """Link specialties to a facility"""
+        try:
+            # First remove existing links
+            self.client.table("facility_specialties").delete().eq("facility_id", facility_id).execute()
+            
+            # Get or create specialties and create links
+            for specialty_name in specialties:
+                specialty = await self.get_specialty_by_name(specialty_name)
+                if specialty:
+                    self.client.table("facility_specialties").insert({
+                        "facility_id": facility_id,
+                        "specialty_id": specialty["id"]
+                    }).execute()
+            
+            return True
+            
+        except APIError as e:
+            logger.error(f"Error linking specialties for facility {facility_id}: {e}")
+            return False
+
     async def get_service_by_slug(self, slug: str) -> Optional[Dict]:
         """Get service by slug"""
         try:

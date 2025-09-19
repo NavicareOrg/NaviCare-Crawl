@@ -151,6 +151,11 @@ class CorticoCrawler:
                 if await self.db_client.insert_booking_channel(channel):
                     self.stats['booking_channels_created'] += 1
             
+            # Process specialties
+            specialties = cortico_record.get('specialties', [])
+            if specialties:
+                await self.db_client.link_facility_specialties(facility_id, specialties)
+            
             # Process service offerings
             await self.process_service_offerings(facility_id, cortico_record.get('workflows', []))
             
