@@ -176,8 +176,185 @@ class CorticoTransformer:
                     'observed_at': datetime.now(timezone.utc).isoformat(),
                     'source': 'cortico'
                 })
-        
+
         return availability_records
+
+    @staticmethod
+    def transform_operating_hours(facility_id: str, operating_hours: Optional[Dict]) -> List[Dict]:
+        """Transform operating hours map to facility hours records"""
+        if not operating_hours:
+            return []
+
+        weekday_map = {
+            'monday': 0,
+            'tuesday': 1,
+            'wednesday': 2,
+            'thursday': 3,
+            'friday': 4,
+            'saturday': 5,
+            'sunday': 6,
+        }
+
+        hours_records: List[Dict] = []
+
+        for raw_day, raw_schedule in operating_hours.items():
+            if raw_day is None:
+                continue
+
+            day_key = str(raw_day).strip().lower()
+            weekday = weekday_map.get(day_key)
+            if weekday is None:
+                continue
+
+            if not raw_schedule:
+                continue
+
+            schedule = str(raw_schedule).strip()
+            if not schedule:
+                continue
+
+            normalized = CorticoTransformer._normalize_schedule_text(schedule)
+
+            if normalized.lower() == 'closed':
+                continue
+
+            segments = [segment.strip() for segment in normalized.split(',') if segment.strip()]
+            parsed_any_segment = False
+
+            for segment in segments:
+                parsed = CorticoTransformer._parse_hour_segment(segment)
+                if not parsed:
+                    continue
+
+                open_time, close_time = parsed
+                hours_records.append({
+                    'facility_id': facility_id,
+                    'weekday': weekday,
+                    'open_time': open_time,
+                    'close_time': close_time,
+                    'notes': None
+                })
+                parsed_any_segment = True
+
+            if not parsed_any_segment:
+                hours_records.append({
+                    'facility_id': facility_id,
+                    'weekday': weekday,
+                    'open_time': None,
+                    'close_time': None,
+                    'notes': schedule
+                })
+
+        return hours_records
+
+    @staticmethod
+    def _normalize_schedule_text(text: str) -> str:
+        """Normalize common punctuation and whitespace in schedule text"""
+        replacements = {
+            '\u2013': '-',
+            '\u2014': '-',
+            '\u2212': '-',
+            '\u2009': ' ',
+            '\u200a': ' ',
+            '\u200b': ' ',
+            '\u00a0': ' ',
+        }
+
+        normalized = text
+        for target, repl in replacements.items():
+            normalized = normalized.replace(target, repl)
+
+        normalized = normalized.replace(' to ', ' - ')
+        normalized = re.sub(r'\s+', ' ', normalized)
+        return normalized.strip()
+
+    @staticmethod
+    def _parse_hour_segment(segment: str) -> Optional[tuple[str, str]]:
+        """Parse a single time range segment into 24-hour open/close times"""
+        cleaned_segment = segment.strip()
+        if not cleaned_segment:
+            return None
+
+        cleaned_segment = re.sub(r'\s*-\s*', '-', cleaned_segment)
+        match = re.match(
+            r'(?P<start>\d{1,2}(?::\d{2})?\s*(?:AM|PM|am|pm)?)\-(?P<end>\d{1,2}(?::\d{2})?\s*(?:AM|PM|am|pm)?)',
+            cleaned_segment
+        )
+
+        if not match:
+            return None
+
+        start_raw = match.group('start').strip()
+        end_raw = match.group('end').strip()
+
+        end_meridiem = CorticoTransformer._extract_meridiem(end_raw)
+        start_meridiem = CorticoTransformer._extract_meridiem(start_raw) or end_meridiem
+
+        open_time = CorticoTransformer._to_24h_time(start_raw, start_meridiem)
+        close_time = CorticoTransformer._to_24h_time(end_raw, end_meridiem)
+
+        if not open_time or not close_time:
+            return None
+
+        return open_time, close_time
+
+    @staticmethod
+    def _extract_meridiem(time_str: str) -> Optional[str]:
+        """Return AM/PM marker if present in the time string"""
+        if not time_str:
+            return None
+
+        match = re.search(r'(AM|PM)', time_str, re.IGNORECASE)
+        if not match:
+            return None
+
+        return match.group(1).upper()
+
+    @staticmethod
+    def _to_24h_time(time_str: str, fallback_meridiem: Optional[str]) -> Optional[str]:
+        """Convert a time string with optional meridiem to 24-hour HH:MM"""
+        if not time_str:
+            return None
+
+        cleaned = time_str.strip().upper()
+        cleaned = cleaned.replace('.', '')
+
+        meridiem = CorticoTransformer._extract_meridiem(cleaned)
+        if meridiem:
+            cleaned = re.sub(r'(AM|PM)', '', cleaned)
+        else:
+            meridiem = fallback_meridiem
+
+        cleaned = cleaned.strip()
+        if not cleaned:
+            return None
+
+        if ':' in cleaned:
+            hour_str, minute_str = cleaned.split(':', 1)
+        else:
+            hour_str, minute_str = cleaned, '00'
+
+        try:
+            hour = int(hour_str)
+            minute = int(minute_str)
+        except ValueError:
+            return None
+
+        if minute < 0 or minute > 59:
+            return None
+
+        if meridiem:
+            if meridiem == 'AM':
+                if hour == 12:
+                    hour = 0
+            elif meridiem == 'PM':
+                if hour != 12:
+                    hour += 12
+
+        if hour < 0 or hour > 23:
+            return None
+
+        return f"{hour:02d}:{minute:02d}"
 
     @staticmethod
     def _determine_facility_type(specialties: List[str], workflows: List[Dict]) -> str:

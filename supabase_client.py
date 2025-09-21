@@ -254,6 +254,26 @@ class SupabaseClient:
             logger.error(f"Error inserting availability: {e}")
             return False
 
+    async def replace_facility_hours(self, facility_id: str, hours: List[Dict]) -> bool:
+        """Replace facility operating hours with new records"""
+        try:
+            self.client.table("facility_hours").delete().eq("facility_id", facility_id).execute()
+
+            if not hours:
+                return True
+
+            response = (
+                self.client.table("facility_hours")
+                .insert(hours)
+                .execute()
+            )
+
+            return len(response.data) > 0
+
+        except APIError as e:
+            logger.error(f"Error replacing facility hours for {facility_id}: {e}")
+            return False
+
     async def get_facility_stats(self) -> Dict:
         """Get basic statistics about facilities in the database"""
         try:
