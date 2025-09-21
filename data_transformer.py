@@ -195,16 +195,45 @@ class CorticoTransformer:
             'sunday': 6,
         }
 
+        canonical_weekday_labels = {value: key.capitalize() for key, value in weekday_map.items()}
+
+        skip_patterns = [
+            r'^-$',
+            r'^closed$',
+            r'^by appointment',
+            r'^call',
+            r'^contact',
+            r'^n/?a$',
+            r'^tbd',
+            r'hours vary',
+        ]
+
         hours_records: List[Dict] = []
 
-        for raw_day, raw_schedule in operating_hours.items():
+        if isinstance(operating_hours, list):
+            day_items = enumerate(operating_hours)
+        else:
+            day_items = operating_hours.items()
+
+        for raw_day, raw_schedule in day_items:
             if raw_day is None:
                 continue
 
-            day_key = str(raw_day).strip().lower()
+            original_day_label = str(raw_day).strip()
+            day_key = original_day_label.lower()
             weekday = weekday_map.get(day_key)
             if weekday is None:
-                continue
+                try:
+                    weekday = int(day_key)
+                except ValueError:
+                    continue
+                else:
+                    if not 0 <= weekday <= 6:
+                        continue
+
+            weekday_label = canonical_weekday_labels.get(weekday)
+            if not weekday_label:
+                weekday_label = original_day_label.title() if original_day_label else None
 
             if not raw_schedule:
                 continue
@@ -214,12 +243,28 @@ class CorticoTransformer:
                 continue
 
             normalized = CorticoTransformer._normalize_schedule_text(schedule)
-
-            if normalized.lower() == 'closed':
+            normalized_lower = normalized.lower()
+            if not normalized_lower:
                 continue
 
-            segments = [segment.strip() for segment in normalized.split(',') if segment.strip()]
-            parsed_any_segment = False
+            if any(re.search(pattern, normalized_lower) for pattern in skip_patterns):
+                continue
+
+            if '24/7' in normalized_lower or re.search(r'24\s*(hours?|hrs?)', normalized_lower):
+                hours_records.append({
+                    'facility_id': facility_id,
+                    'weekday': weekday,
+                    'weekday_label': weekday_label,
+                    'open_time': '00:00',
+                    'close_time': '23:59',
+                    'notes': None,
+                    'slot': 1
+                })
+                continue
+
+            normalized = normalized.replace(' and ', ', ')
+            segments = [segment.strip() for segment in re.split(r'[,;/]', normalized) if segment.strip()]
+            day_segments = []
 
             for segment in segments:
                 parsed = CorticoTransformer._parse_hour_segment(segment)
@@ -227,22 +272,28 @@ class CorticoTransformer:
                     continue
 
                 open_time, close_time = parsed
+                if not open_time or not close_time:
+                    continue
+                if open_time >= close_time:
+                    continue
+                if (open_time, close_time) in day_segments:
+                    continue
+
+                day_segments.append((open_time, close_time))
+
+            if not day_segments:
+                logger.debug("Unable to parse operating hours", extra={'day': raw_day, 'schedule': schedule})
+                continue
+
+            for slot_index, (open_time, close_time) in enumerate(day_segments, start=1):
                 hours_records.append({
                     'facility_id': facility_id,
                     'weekday': weekday,
+                    'weekday_label': weekday_label,
                     'open_time': open_time,
                     'close_time': close_time,
-                    'notes': None
-                })
-                parsed_any_segment = True
-
-            if not parsed_any_segment:
-                hours_records.append({
-                    'facility_id': facility_id,
-                    'weekday': weekday,
-                    'open_time': None,
-                    'close_time': None,
-                    'notes': schedule
+                    'notes': None,
+                    'slot': slot_index
                 })
 
         return hours_records

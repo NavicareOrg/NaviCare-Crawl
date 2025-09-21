@@ -262,9 +262,42 @@ class SupabaseClient:
             if not hours:
                 return True
 
+            sanitized: List[Dict[str, Any]] = []
+            for record in hours:
+                if not record:
+                    continue
+
+                weekday = record.get('weekday')
+                open_time = record.get('open_time')
+                close_time = record.get('close_time')
+                if weekday is None or not open_time or not close_time:
+                    continue
+
+                slot = record.get('slot') or 1
+
+                weekday_label = record.get('weekday_label')
+                if not weekday_label and isinstance(weekday, int) and 0 <= weekday <= 6:
+                    weekday_label = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][weekday]
+
+                sanitized.append({
+                    'facility_id': facility_id,
+                    'weekday': weekday,
+                    'weekday_label': weekday_label,
+                    'open_time': open_time,
+                    'close_time': close_time,
+                    'notes': record.get('notes'),
+                    'slot': slot
+                })
+
+            if not sanitized:
+                logger.debug(f"No valid operating hours to insert for facility {facility_id}")
+                return True
+
+            sanitized.sort(key=lambda r: (r['weekday'], r['slot'], r['open_time']))
+
             response = (
                 self.client.table("facility_hours")
-                .insert(hours)
+                .insert(sanitized)
                 .execute()
             )
 
