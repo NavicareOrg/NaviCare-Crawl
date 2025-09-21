@@ -46,6 +46,7 @@ class CorticoCrawler:
             'service_offerings_created': 0,
             'booking_channels_created': 0,
             'availability_records_created': 0,
+            'facility_hours_records_created': 0,
             'errors': 0,
             'validation_errors': 0
         }
@@ -151,9 +152,17 @@ class CorticoCrawler:
                 if await self.db_client.insert_booking_channel(channel):
                     self.stats['booking_channels_created'] += 1
             
+            # Process specialties
+            specialties = cortico_record.get('specialties', [])
+            if specialties:
+                await self.db_client.link_facility_specialties(facility_id, specialties)
+            
             # Process service offerings
             await self.process_service_offerings(facility_id, cortico_record.get('workflows', []))
-            
+
+            # Process operating hours
+            await self.process_facility_hours(facility_id, cortico_record.get('operating_hours'))
+
             # Process availability data
             await self.process_availability(facility_id, cortico_record.get('availability', {}))
             
@@ -205,6 +214,19 @@ class CorticoCrawler:
                     
             except Exception as e:
                 logger.error(f"Error processing availability record: {e}")
+
+    async def process_facility_hours(self, facility_id: str, operating_hours: Optional[Dict]):
+        """Process operating hours for a facility"""
+        try:
+            hour_records = CorticoTransformer.transform_operating_hours(facility_id, operating_hours)
+
+            if await self.db_client.replace_facility_hours(facility_id, hour_records):
+                self.stats['facility_hours_records_created'] += len(hour_records)
+            else:
+                logger.warning(f"Failed to upsert operating hours for facility {facility_id}")
+
+        except Exception as e:
+            logger.error(f"Error processing operating hours for facility {facility_id}: {e}")
 
     async def crawl_all(self):
         """Main crawling method - processes all pages"""
@@ -338,7 +360,7 @@ async def main():
     
     async with CorticoCrawler(config) as crawler:
         # For testing, crawl just one page
-        await crawler.crawl_single_page(1)
+        await crawler.crawl_single_page(page_number=1)
         
         # For full crawl, use:
         # await crawler.crawl_all()
