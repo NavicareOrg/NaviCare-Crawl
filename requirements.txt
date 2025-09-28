@@ -3,4 +3,4 @@ aiohttp>=3.8.0
 asyncpg>=0.28.0
 python-dotenv>=1.0.0
 supabase
-dateutil
+python-dateutil
