@@ -6,7 +6,7 @@ Handles all database operations using Supabase Python client
 import os
 import logging
 from typing import Dict, List, Optional, Any
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from supabase import create_client, Client
 from postgrest import APIError
 import json
@@ -134,12 +134,40 @@ class SupabaseClient:
     async def insert_observation(self, observation_data: Dict) -> bool:
         """Insert facility observation"""
         try:
+            # Try to deduplicate by (facility_id, source, source_record_id)
+            facility_id = observation_data.get('facility_id')
+            source = observation_data.get('source')
+            source_record_id = observation_data.get('source_record_id')
+
+            if facility_id and source and source_record_id:
+                existing = (
+                    self.client.table("facility_observations")
+                    .select("id")
+                    .eq("facility_id", facility_id)
+                    .eq("source", source)
+                    .eq("source_record_id", source_record_id)
+                    .limit(1)
+                    .execute()
+                )
+
+                if existing.data:
+                    # Update the existing observation with latest data
+                    obs_id = existing.data[0]["id"]
+                    update_response = (
+                        self.client.table("facility_observations")
+                        .update(observation_data)
+                        .eq("id", obs_id)
+                        .execute()
+                    )
+                    return len(update_response.data) > 0
+
+            # Fallback: insert new observation
             response = (
                 self.client.table("facility_observations")
                 .insert(observation_data)
                 .execute()
             )
-            
+
             return len(response.data) > 0
             
         except APIError as e:
@@ -251,13 +279,38 @@ class SupabaseClient:
     async def insert_booking_channel(self, channel_data: Dict) -> bool:
         """Insert facility booking channel"""
         try:
-            response = (
+            # Deduplicate by facility + url or facility + phone when possible
+            facility_id = channel_data.get('facility_id')
+            url = channel_data.get('url')
+            phone = channel_data.get('phone')
+
+            query = self.client.table("facility_booking_channels").select("id")
+            query = query.eq("facility_id", facility_id)
+
+            if url:
+                resp = query.eq("url", url).limit(1).execute()
+            elif phone:
+                resp = query.eq("phone", phone).limit(1).execute()
+            else:
+                resp = None
+
+            if resp and resp.data:
+                # Update existing channel (refresh last_checked_at, etc.)
+                existing_id = resp.data[0]["id"]
+                update_response = (
+                    self.client.table("facility_booking_channels")
+                    .update(channel_data)
+                    .eq("id", existing_id)
+                    .execute()
+                )
+                return len(update_response.data) > 0
+
+            insert_response = (
                 self.client.table("facility_booking_channels")
                 .insert(channel_data)
                 .execute()
             )
-            
-            return len(response.data) > 0
+            return len(insert_response.data) > 0
             
         except APIError as e:
             logger.error(f"Error inserting booking channel: {e}")
@@ -266,12 +319,37 @@ class SupabaseClient:
     async def insert_availability(self, availability_data: Dict) -> bool:
         """Insert facility service availability"""
         try:
+            # Deduplicate by facility_id + available_at if provided
+            facility_id = availability_data.get('facility_id')
+            available_at = availability_data.get('available_at')
+
+            if facility_id and available_at:
+                existing = (
+                    self.client.table("facility_availability")
+                    .select("id")
+                    .eq("facility_id", facility_id)
+                    .eq("available_at", available_at)
+                    .limit(1)
+                    .execute()
+                )
+
+                if existing.data:
+                    # Update existing availability with any new metadata
+                    avail_id = existing.data[0]["id"]
+                    update_response = (
+                        self.client.table("facility_availability")
+                        .update(availability_data)
+                        .eq("id", avail_id)
+                        .execute()
+                    )
+                    return len(update_response.data) > 0
+
             response = (
                 self.client.table("facility_availability")
                 .insert(availability_data)
                 .execute()
             )
-            
+
             return len(response.data) > 0
             
         except APIError as e:
@@ -373,8 +451,10 @@ class SupabaseClient:
     async def cleanup_old_observations(self, days_old: int = 7) -> int:
         """Clean up old observations to prevent database bloat"""
         try:
-            cutoff_date = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-            cutoff_date = cutoff_date.replace(day=cutoff_date.day - days_old)
+            # Use timedelta to calculate cutoff safely across month/year boundaries
+            cutoff_date = (datetime.now(timezone.utc) - timedelta(days=days_old)).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
             
             response = (
                 self.client.table("facility_observations")
