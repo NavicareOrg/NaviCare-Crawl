@@ -211,7 +211,6 @@ async def main():
         logger.info(f"   Max Concurrent: {config.max_concurrent}")
         logger.info(f"   Request Delay: {config.delay_between_requests}s")
         logger.info(f"   Max Retries: {config.max_retries}")
-        logger.info()
         
         # Run availability update
         stats = await fetch_and_update_availability(config)
