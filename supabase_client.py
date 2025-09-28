@@ -25,6 +25,30 @@ class SupabaseClient:
         self.client: Client = create_client(self.url, self.key)
         logger.info("Supabase client initialized successfully")
 
+    async def create_service(self, service_data: Dict) -> Optional[str]:
+        """Create a new service and return its ID"""
+        try:
+            response = (
+                self.client.table("services")
+                .insert(service_data)
+                .execute()
+            )
+            
+            if response.data:
+                service_id = response.data[0]['id']
+                logger.debug(f"Created service: {service_data.get('display_name')}")
+                return service_id
+            else:
+                raise Exception("Failed to insert service - no ID returned")
+                
+        except APIError as e:
+            logger.error(f"Error creating service {service_data.get('display_name')}: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error creating service: {e}")
+            return None
+    
+    
     async def find_existing_facility(self, slug: str, name: str, city: str, province: str) -> Optional[Dict]:
         """Find existing facility by slug or name/location combination"""
         try:
@@ -243,7 +267,7 @@ class SupabaseClient:
         """Insert facility service availability"""
         try:
             response = (
-                self.client.table("facility_service_availability")
+                self.client.table("facility_availability")
                 .insert(availability_data)
                 .execute()
             )

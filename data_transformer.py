@@ -4,9 +4,9 @@ Handles transformation of external API data to NaviCare database format
 """
 
 import re
-import json
 from typing import Dict, List, Optional
 from datetime import datetime, timezone
+from dateutil.parser import isoparse
 import logging
 
 logger = logging.getLogger(__name__)
@@ -130,14 +130,19 @@ class CorticoTransformer:
         for workflow in workflows:
             if not isinstance(workflow, dict):
                 continue  # Skip invalid workflow entries
-            service_slug = CorticoTransformer.WORKFLOW_SERVICE_MAPPING.get(
-                workflow.get('slug', '')
-            )
+            # service_slug = CorticoTransformer.WORKFLOW_SERVICE_MAPPING.get(
+            #     workflow.get('slug', '')
+            # )
+            service_slug = workflow.get('display_name', '')
+            # log service slug
+            logger.debug(f"Get workflow slug '{workflow.get('slug', '')}' ")
             
             if service_slug:
                 offerings.append({
                     'facility_id': facility_id,
                     'service_slug': service_slug,  # Will be resolved to service_id later
+                    'display_name': workflow.get('display_name', ''),
+                    'workflow_type': workflow.get('workflow_type', ''),
                     'has_in_person': workflow.get('has_clinic', False),
                     'has_phone': workflow.get('has_phone', False),
                     'has_video': workflow.get('has_video', False),
@@ -150,34 +155,39 @@ class CorticoTransformer:
 
     @staticmethod
     def transform_availability(facility_id: str, availability_data: Dict) -> List[Dict]:
-        """Transform Cortico availability data to availability records"""
-        # Defensive: Ensure availability_data is a dict
+        """Transform Cortico availability data to a single nearest availability record"""
+        
         availability_data = availability_data or {}
-        availability_records = []
-        
-        for workflow_channel, next_available in availability_data.items():
-            if not next_available:
+        if not availability_data:
+            return []
+
+        now = datetime.now(timezone.utc)
+        # Find the kv with available_at closest to now (in the future)
+        min_key = None
+        min_value = None
+        min_delta = None
+        for k, v in availability_data.items():
+            try:
+                dt = isoparse(v)
+                delta = (dt - now).total_seconds()
+                if delta < 0:
+                    continue  # skip past times
+                if min_delta is None or delta < min_delta:
+                    min_key = k
+                    min_value = v
+                    min_delta = delta
+            except Exception:
                 continue
-            
-            # Parse workflow and channel from the key (e.g., "family-doctor_clinic")
-            parts = workflow_channel.split('_')
-            if len(parts) != 2:
-                continue
-            
-            workflow_slug, channel = parts
-            service_slug = CorticoTransformer.WORKFLOW_SERVICE_MAPPING.get(workflow_slug)
-            
-            if service_slug:
-                availability_records.append({
-                    'facility_id': facility_id,
-                    'service_slug': service_slug,  # Will be resolved to service_id later
-                    'channel_type': channel,  # 'clinic', 'phone', 'virtual'
-                    'next_available_at': next_available,
-                    'observed_at': datetime.now(timezone.utc).isoformat(),
-                    'source': 'cortico'
-                })
-        
-        return availability_records
+
+        if min_key is not None:
+            return [{
+                'facility_id': facility_id,
+                'available_at': min_value,
+                'created_at': now.isoformat(),
+                'source': 'cortico'
+            }]
+        else:
+            return []
 
     @staticmethod
     def _determine_facility_type(specialties: List[str], workflows: List[Dict]) -> str:

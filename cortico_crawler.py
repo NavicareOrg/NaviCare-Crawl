@@ -177,11 +177,20 @@ class CorticoCrawler:
                 # Resolve service slug to service ID
                 service = await self.db_client.get_service_by_slug(offering['service_slug'])
                 if not service:
-                    logger.warning(f"Service not found for slug: {offering['service_slug']}")
-                    continue
-                
+                    # create a new service if not found
+                    service_data = {
+                        'slug': offering['service_slug'],
+                        'display_name': offering.get('display_name', ''),
+                        'category': offering.get('workflow_type', '')
+                    }
+                    service_id = await self.db_client.create_service(service_data)
+                    if not service_id:
+                        logger.warning(f"Failed to create service for slug: {offering['service_slug']}")
+                        continue
+                    service = {'id': service_id}
+
                 # Replace service_slug with service_id
-                offering_data = {k: v for k, v in offering.items() if k != 'service_slug'}
+                offering_data = {k: v for k, v in offering.items() if k not in ('service_slug', 'display_name', 'workflow_type')}
                 offering_data['service_id'] = service['id']
                 
                 if await self.db_client.upsert_facility_service_offering(offering_data):
@@ -193,23 +202,13 @@ class CorticoCrawler:
     async def process_availability(self, facility_id: str, availability_data: Dict):
         """Process availability data for a facility"""
         availability_records = CorticoTransformer.transform_availability(facility_id, availability_data)
-        
-        for record in availability_records:
-            try:
-                # Resolve service slug to service ID
-                service = await self.db_client.get_service_by_slug(record['service_slug'])
-                if not service:
-                    continue
-                
-                # Replace service_slug with service_id
-                availability_record = {k: v for k, v in record.items() if k != 'service_slug'}
-                availability_record['service_id'] = service['id']
-                
-                if await self.db_client.insert_availability(availability_record):
-                    self.stats['availability_records_created'] += 1
-                    
-            except Exception as e:
-                logger.error(f"Error processing availability record: {e}")
+        if not availability_records:
+            return
+        try:
+            if await self.db_client.insert_availability(availability_records):
+                self.stats['availability_records_created'] += 1
+        except Exception as e:
+            logger.error(f"Error processing availability record: {e}")
 
     async def crawl_all(self):
         """Main crawling method - processes all pages"""
