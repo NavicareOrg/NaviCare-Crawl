@@ -80,7 +80,8 @@ async def update_facility_availability(crawler: CorticoCrawler, cortico_record: 
         
         if availability_records:
             # Delete existing availability records for this facility
-            await crawler.db_client.client.table("facility_availability").delete().eq("facility_id", facility_id).execute()
+            # .execute() returns a synchronous APIResponse object, so do not await it
+            crawler.db_client.client.table("facility_availability").delete().eq("facility_id", facility_id).execute()
             
             # Insert new availability records
             if await crawler.db_client.insert_availability(availability_records):
