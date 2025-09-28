@@ -278,6 +278,59 @@ class SupabaseClient:
             logger.error(f"Error inserting availability: {e}")
             return False
 
+    async def replace_facility_hours(self, facility_id: str, hours: List[Dict]) -> bool:
+        """Replace facility operating hours with new records"""
+        try:
+            self.client.table("facility_hours").delete().eq("facility_id", facility_id).execute()
+
+            if not hours:
+                return True
+
+            sanitized: List[Dict[str, Any]] = []
+            for record in hours:
+                if not record:
+                    continue
+
+                weekday = record.get('weekday')
+                open_time = record.get('open_time')
+                close_time = record.get('close_time')
+                if weekday is None or not open_time or not close_time:
+                    continue
+
+                slot = record.get('slot') or 1
+
+                weekday_label = record.get('weekday_label')
+                if not weekday_label and isinstance(weekday, int) and 0 <= weekday <= 6:
+                    weekday_label = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][weekday]
+
+                sanitized.append({
+                    'facility_id': facility_id,
+                    'weekday': weekday,
+                    'weekday_label': weekday_label,
+                    'open_time': open_time,
+                    'close_time': close_time,
+                    'notes': record.get('notes'),
+                    'slot': slot
+                })
+
+            if not sanitized:
+                logger.debug(f"No valid operating hours to insert for facility {facility_id}")
+                return True
+
+            sanitized.sort(key=lambda r: (r['weekday'], r['slot'], r['open_time']))
+
+            response = (
+                self.client.table("facility_hours")
+                .insert(sanitized)
+                .execute()
+            )
+
+            return len(response.data) > 0
+
+        except APIError as e:
+            logger.error(f"Error replacing facility hours for {facility_id}: {e}")
+            return False
+
     async def get_facility_stats(self) -> Dict:
         """Get basic statistics about facilities in the database"""
         try:
