@@ -54,13 +54,12 @@ The repository includes GitHub Actions workflows for automated data updates:
 - Runs twice daily (7:00 AM and 7:00 PM EDT)
 - Performs complete data crawl and update
 - Updates all facility information including details, services, hours, etc.
-- Cleans up old observation data
 
 ### 2. Availability-Only Update (update-availability.yml)
 - Runs once daily (between the two full crawls)
 - Updates only the availability information for existing facilities
 - Lightweight operation that runs faster than full crawl
-- Does not clean up old data or modify non-availability fields
+- Does not modify non-availability fields
 
 To use the GitHub Actions workflows:
 

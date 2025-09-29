@@ -94,24 +94,6 @@ class CorticoTransformer:
         }
 
     @staticmethod
-    def transform_observation(facility_id: str, cortico_data: Dict) -> Dict:
-        """Transform Cortico data to facility observation format"""
-        # No changes needed here, as it uses simple gets with defaults
-        return {
-            'facility_id': facility_id,
-            'source': 'cortico',
-            'source_record_id': str(cortico_data.get('id', '')),
-            'booking_url': cortico_data.get('booking_url'),
-            'host': cortico_data.get('host'),
-            'accepts_new_patients': cortico_data.get('accepts_new_patients'),
-            'is_bookable_online': cortico_data.get('is_bookable_online'),
-            'has_telehealth': cortico_data.get('has_telehealth'),
-            'raw_json': cortico_data,  # Supabase handles JSON automatically
-            'observed_at': datetime.now(timezone.utc).isoformat(),
-            'confidence': 0.85  # High confidence for Cortico data
-        }
-
-    @staticmethod
     def transform_booking_channels(facility_id: str, cortico_data: Dict) -> List[Dict]:
         """Transform Cortico booking data to booking channels"""
         channels = []
@@ -567,21 +549,5 @@ class DataValidator:
                     errors.append("Latitude must be between -90 and 90")
             except (ValueError, TypeError):
                 errors.append("Invalid latitude format")
-        
-        return len(errors) == 0, errors
-
-    @staticmethod
-    def validate_observation(observation_data: Dict) -> tuple[bool, List[str]]:
-        """Validate observation data"""
-        errors = []
-        
-        if not observation_data.get('facility_id'):
-            errors.append("Facility ID is required")
-        
-        if not observation_data.get('source'):
-            errors.append("Source is required")
-        
-        if not observation_data.get('observed_at'):
-            errors.append("Observed at timestamp is required")
         
         return len(errors) == 0, errors

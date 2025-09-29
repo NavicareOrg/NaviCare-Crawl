@@ -22,7 +22,7 @@ def create_config_from_env() -> CrawlConfig:
         max_concurrent=int(os.getenv('CRAWLER_MAX_CONCURRENT', '3')),
         delay_between_requests=float(os.getenv('CRAWLER_DELAY', '1.0')),
         max_retries=int(os.getenv('CRAWLER_MAX_RETRIES', '3')),
-        cleanup_old_observations=os.getenv('CLEANUP_OLD_OBSERVATIONS', 'true').lower() == 'true'
+        cleanup_old_observations=False
     )
 
 def validate_environment():
@@ -95,7 +95,6 @@ async def main():
         print(f"   Max Concurrent: {config.max_concurrent}")
         print(f"   Request Delay: {config.delay_between_requests}s")
         print(f"   Max Retries: {config.max_retries}")
-        print(f"   Cleanup Old Data: {config.cleanup_old_observations}")
         print()
         
         # Run appropriate crawl mode

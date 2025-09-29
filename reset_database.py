@@ -35,7 +35,6 @@ CORE_TABLES: Tuple[ResetStep, ...] = (
     ("facility_specialties", ("facility_id", DUMMY_UUID)),
     ("facility_languages", ("facility_id", DUMMY_UUID)),
     ("facility_tags", ("facility_id", DUMMY_UUID)),
-    ("facility_observations", ("id", DUMMY_INT)),
     ("user_favorites", ("facility_id", DUMMY_UUID)),
     ("facilities", ("id", DUMMY_UUID)),
 )

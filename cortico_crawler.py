@@ -31,7 +31,7 @@ class CrawlConfig:
     max_concurrent: int = 3  # Conservative for Supabase API limits
     delay_between_requests: float = 1.0  # seconds
     max_retries: int = 3
-    cleanup_old_observations: bool = True
+    cleanup_old_observations: bool = False
 
 class CorticoCrawler:
     def __init__(self, config: CrawlConfig):
@@ -42,7 +42,6 @@ class CorticoCrawler:
             'total_processed': 0,
             'facilities_created': 0,
             'facilities_updated': 0,
-            'observations_created': 0,
             'service_offerings_created': 0,
             'booking_channels_created': 0,
             'availability_records_created': 0,
@@ -135,17 +134,6 @@ class CorticoCrawler:
             else:
                 self.stats['facilities_created'] += 1
             
-            # Create observation
-            observation_data = CorticoTransformer.transform_observation(facility_id, cortico_record)
-            is_valid, validation_errors = DataValidator.validate_observation(observation_data)
-            
-            if is_valid:
-                await self.db_client.insert_observation(observation_data)
-                self.stats['observations_created'] += 1
-            else:
-                logger.warning(f"Observation validation failed: {validation_errors}")
-                self.stats['validation_errors'] += 1
-            
             # Process booking channels
             booking_channels = CorticoTransformer.transform_booking_channels(facility_id, cortico_record)
             for channel in booking_channels:
@@ -232,11 +220,6 @@ class CorticoCrawler:
         logger.info("Starting Cortico API crawl")
         start_time = time.time()
         
-        # Clean up old observations if enabled
-        if self.config.cleanup_old_observations:
-            deleted_count = await self.db_client.cleanup_old_observations(days_old=7)
-            logger.info(f"Cleaned up {deleted_count} old observations")
-        
         current_url = f"{self.config.base_url}?format=json"
         page_count = 0
         
@@ -307,7 +290,6 @@ class CorticoCrawler:
                 logger.info("\nDATABASE STATISTICS")
                 logger.info("-" * 30)
                 logger.info(f"Total Facilities in DB: {db_stats.get('total_facilities', 'Unknown')}")
-                logger.info(f"Total Observations in DB: {db_stats.get('total_observations', 'Unknown')}")
                 
                 facility_types = db_stats.get('facility_types', {})
                 if facility_types:

@@ -131,49 +131,6 @@ class SupabaseClient:
             logger.error(f"Unexpected error upserting facility: {e}")
             raise
 
-    async def insert_observation(self, observation_data: Dict) -> bool:
-        """Insert facility observation"""
-        try:
-            # Try to deduplicate by (facility_id, source, source_record_id)
-            facility_id = observation_data.get('facility_id')
-            source = observation_data.get('source')
-            source_record_id = observation_data.get('source_record_id')
-
-            if facility_id and source and source_record_id:
-                existing = (
-                    self.client.table("facility_observations")
-                    .select("id")
-                    .eq("facility_id", facility_id)
-                    .eq("source", source)
-                    .eq("source_record_id", source_record_id)
-                    .limit(1)
-                    .execute()
-                )
-
-                if existing.data:
-                    # Update the existing observation with latest data
-                    obs_id = existing.data[0]["id"]
-                    update_response = (
-                        self.client.table("facility_observations")
-                        .update(observation_data)
-                        .eq("id", obs_id)
-                        .execute()
-                    )
-                    return len(update_response.data) > 0
-
-            # Fallback: insert new observation
-            response = (
-                self.client.table("facility_observations")
-                .insert(observation_data)
-                .execute()
-            )
-
-            return len(response.data) > 0
-            
-        except APIError as e:
-            logger.error(f"Error inserting observation: {e}")
-            return False
-
     async def get_specialty_by_name(self, name: str) -> Optional[Dict]:
         """Get specialty by name, create if not exists"""
         try:
@@ -426,13 +383,6 @@ class SupabaseClient:
                 .execute()
             )
             
-            # Count observations
-            obs_response = (
-                self.client.table("facility_observations")
-                .select("id", count="exact")
-                .execute()
-            )
-            
             facility_types = {}
             for facility in type_response.data:
                 facility_type = facility['facility_type']
@@ -440,36 +390,12 @@ class SupabaseClient:
             
             return {
                 'total_facilities': total_response.count,
-                'total_observations': obs_response.count,
                 'facility_types': facility_types
             }
             
         except APIError as e:
             logger.error(f"Error fetching stats: {e}")
             return {}
-
-    async def cleanup_old_observations(self, days_old: int = 7) -> int:
-        """Clean up old observations to prevent database bloat"""
-        try:
-            # Use timedelta to calculate cutoff safely across month/year boundaries
-            cutoff_date = (datetime.now(timezone.utc) - timedelta(days=days_old)).replace(
-                hour=0, minute=0, second=0, microsecond=0
-            )
-            
-            response = (
-                self.client.table("facility_observations")
-                .delete()
-                .lt("observed_at", cutoff_date.isoformat())
-                .execute()
-            )
-            
-            deleted_count = len(response.data) if response.data else 0
-            logger.info(f"Cleaned up {deleted_count} old observations")
-            return deleted_count
-            
-        except APIError as e:
-            logger.error(f"Error cleaning up old observations: {e}")
-            return 0
 
     async def test_connection(self) -> bool:
         """Test the Supabase connection"""
