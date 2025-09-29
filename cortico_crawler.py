@@ -31,7 +31,6 @@ class CrawlConfig:
     max_concurrent: int = 3  # Conservative for Supabase API limits
     delay_between_requests: float = 1.0  # seconds
     max_retries: int = 3
-    cleanup_old_observations: bool = False
 
 class CorticoCrawler:
     def __init__(self, config: CrawlConfig):
@@ -219,11 +218,6 @@ class CorticoCrawler:
         """Crawl a specific range of pages"""
         logger.info(f"Starting Cortico API crawl for pages {start_page} to {end_page}")
         start_time = time.time()
-        
-        # Clean up old observations if enabled (only on first page)
-        if self.config.cleanup_old_observations and start_page == 1:
-            deleted_count = await self.db_client.cleanup_old_observations(days_old=7)
-            logger.info(f"Cleaned up {deleted_count} old observations")
         
         processed_pages = 0
         

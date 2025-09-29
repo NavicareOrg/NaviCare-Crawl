@@ -22,7 +22,6 @@ def create_config_from_env() -> CrawlConfig:
         max_concurrent=int(os.getenv('CRAWLER_MAX_CONCURRENT', '3')),
         delay_between_requests=float(os.getenv('CRAWLER_DELAY', '1.0')),
         max_retries=int(os.getenv('CRAWLER_MAX_RETRIES', '3')),
-        cleanup_old_observations=False
     )
 
 def validate_environment():

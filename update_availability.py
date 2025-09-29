@@ -37,7 +37,6 @@ def create_config_from_env() -> CrawlConfig:
         max_concurrent=int(os.getenv('CRAWLER_MAX_CONCURRENT', '3')),
         delay_between_requests=float(os.getenv('CRAWLER_DELAY', '1.0')),
         max_retries=int(os.getenv('CRAWLER_MAX_RETRIES', '3')),
-        cleanup_old_observations=False  # Don't cleanup for availability-only updates
     )
 
 def validate_environment():
@@ -210,9 +209,6 @@ async def main():
             config.batch_size = args.batch_size
         if args.delay:
             config.delay_between_requests = args.delay
-            
-        # Disable cleanup for availability-only updates
-        config.cleanup_old_observations = False
         
         logger.info(f"📊 Configuration:")
         logger.info(f"   API URL: {config.base_url}")

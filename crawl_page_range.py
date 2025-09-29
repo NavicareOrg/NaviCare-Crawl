@@ -22,8 +22,6 @@ def create_config_from_env() -> CrawlConfig:
         max_concurrent=int(os.getenv('CRAWLER_MAX_CONCURRENT', '5')),
         delay_between_requests=float(os.getenv('CRAWLER_DELAY', '0.5')),
         max_retries=int(os.getenv('CRAWLER_MAX_RETRIES', '3')),
-        cleanup_old_observations=(os.getenv('CLEANUP_OLD_OBSERVATIONS', 'true').lower() == 'true' and 
-                                os.getenv('START_PAGE', '1') == '1')  # Only cleanup on first page
     )
 
 def validate_environment():
@@ -85,7 +83,6 @@ async def main():
         print(f"   Max Concurrent: {config.max_concurrent}")
         print(f"   Request Delay: {config.delay_between_requests}s")
         print(f"   Max Retries: {config.max_retries}")
-        print(f"   Cleanup Old Data: {config.cleanup_old_observations}")
         print(f"   Page Range: {args.start_page}-{args.end_page}")
         print()
         
