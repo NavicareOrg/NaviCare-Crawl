@@ -10,9 +10,9 @@ jobs:
   full-crawl:
     runs-on: ubuntu-latest
     env:
-      CRAWLER_BATCH_SIZE: 25
-      CRAWLER_MAX_CONCURRENT: 3
-      CRAWLER_DELAY: 1.0
+      CRAWLER_BATCH_SIZE: 50
+      CRAWLER_MAX_CONCURRENT: 5
+      CRAWLER_DELAY: 0.5
       CRAWLER_MAX_RETRIES: 3
 
     steps:
