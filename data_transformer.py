@@ -32,7 +32,28 @@ class CorticoTransformer:
     @staticmethod
     def transform_facility(cortico_data: Dict) -> Dict:
         """Transform Cortico API data to NaviCare facility format"""
-        
+        # Defensive: if the source payload is not a dict, return safe defaults
+        if not isinstance(cortico_data, dict):
+            logger.warning(f"transform_facility received non-dict cortico_data: {type(cortico_data)}. Returning empty facility data.")
+            return {
+                'name': '',
+                'slug': '',
+                'facility_type': None,
+                'website': None,
+                'email': None,
+                'phone': None,
+                'address_line1': None,
+                'city': None,
+                'province': None,
+                'country': None,
+                'longitude': None,
+                'latitude': None,
+                'accepts_new_patients': False,
+                'is_bookable_online': False,
+                'has_telehealth': False,
+                'status': 'active'
+            }
+
         # Defensive: Ensure lists/dicts are not None
         specialties = cortico_data.get('specialties') or []
         workflows = cortico_data.get('workflows') or []
@@ -156,38 +177,65 @@ class CorticoTransformer:
     @staticmethod
     def transform_availability(facility_id: str, availability_data: Dict) -> List[Dict]:
         """Transform Cortico availability data to a single nearest availability record"""
-        
         availability_data = availability_data or {}
         if not availability_data:
             return []
 
         now = datetime.now(timezone.utc)
-        # Find the kv with available_at closest to now (in the future)
-        min_key = None
+        candidates: List[str] = []
+
+        # availability_data may be a dict of keys->timestamps, or a list of timestamps or dicts
+        if isinstance(availability_data, dict):
+            # Values might be timestamp strings or nested objects
+            for k, v in availability_data.items():
+                if isinstance(v, str):
+                    candidates.append(v)
+                elif isinstance(v, dict):
+                    # common property name
+                    if 'available_at' in v:
+                        candidates.append(v.get('available_at'))
+                    elif 'time' in v:
+                        candidates.append(v.get('time'))
+                elif isinstance(v, list):
+                    for item in v:
+                        if isinstance(item, str):
+                            candidates.append(item)
+        elif isinstance(availability_data, list):
+            for item in availability_data:
+                if isinstance(item, str):
+                    candidates.append(item)
+                elif isinstance(item, dict):
+                    if 'available_at' in item:
+                        candidates.append(item.get('available_at'))
+                    elif 'time' in item:
+                        candidates.append(item.get('time'))
+
+        # Parse candidate timestamps and pick the nearest future one
         min_value = None
         min_delta = None
-        for k, v in availability_data.items():
+        for v in candidates:
+            if not v:
+                continue
             try:
                 dt = isoparse(v)
                 delta = (dt - now).total_seconds()
                 if delta < 0:
-                    continue  # skip past times
+                    continue
                 if min_delta is None or delta < min_delta:
-                    min_key = k
-                    min_value = v
                     min_delta = delta
+                    min_value = v
             except Exception:
                 continue
 
-        if min_key is not None:
+        if min_value:
             return [{
                 'facility_id': facility_id,
                 'available_at': min_value,
                 'created_at': now.isoformat(),
                 'source': 'cortico'
             }]
-        else:
-            return []
+
+        return []
 
     @staticmethod
     def transform_operating_hours(facility_id: str, operating_hours: Optional[Dict]) -> List[Dict]:

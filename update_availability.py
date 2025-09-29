@@ -57,6 +57,10 @@ def validate_environment():
 async def update_facility_availability(crawler: CorticoCrawler, cortico_record: dict):
     """Update availability information for a single facility"""
     try:
+        # Defensive: cortico_record should be a dict; sometimes the API returns a list
+        if not isinstance(cortico_record, dict):
+            logger.error(f"Unexpected cortico_record type: {type(cortico_record)}. Payload: {repr(cortico_record)[:500]}")
+            return False
         # Get facility ID from database using slug or name
         facility_data = CorticoTransformer.transform_facility(cortico_record)
         facility_slug = facility_data.get('slug', '')
