@@ -87,12 +87,17 @@ async def update_facility_availability(crawler: CorticoCrawler, cortico_record: 
             # .execute() returns a synchronous APIResponse object, so do not await it
             crawler.db_client.client.table("facility_availability").delete().eq("facility_id", facility_id).execute()
             
-            # Insert new availability records
-            if await crawler.db_client.insert_availability(availability_records):
-                logger.info(f"Updated availability for facility: {facility_name}")
-                return True
-            else:
-                logger.error(f"Failed to insert availability for facility: {facility_name}")
+            # Insert new availability records in bulk (availability_records is a list)
+            try:
+                resp = crawler.db_client.client.table("facility_availability").insert(availability_records).execute()
+                if getattr(resp, 'data', None):
+                    logger.info(f"Updated availability for facility: {facility_name}")
+                    return True
+                else:
+                    logger.error(f"Failed to insert availability for facility: {facility_name}")
+                    return False
+            except Exception as e:
+                logger.error(f"Exception inserting availability for facility {facility_name}: {e}")
                 return False
         else:
             logger.info(f"No availability data for facility: {facility_name}")
