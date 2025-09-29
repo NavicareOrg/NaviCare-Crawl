@@ -215,6 +215,67 @@ class CorticoCrawler:
         except Exception as e:
             logger.error(f"Error processing operating hours for facility {facility_id}: {e}")
 
+    async def crawl_page_range(self, start_page: int, end_page: int):
+        """Crawl a specific range of pages"""
+        logger.info(f"Starting Cortico API crawl for pages {start_page} to {end_page}")
+        start_time = time.time()
+        
+        # Clean up old observations if enabled (only on first page)
+        if self.config.cleanup_old_observations and start_page == 1:
+            deleted_count = await self.db_client.cleanup_old_observations(days_old=7)
+            logger.info(f"Cleaned up {deleted_count} old observations")
+        
+        processed_pages = 0
+        
+        # Process each page in the range
+        for page_number in range(start_page, end_page + 1):
+            page_url = f"{self.config.base_url}?format=json&page={page_number}"
+            logger.info(f"Fetching page {page_number}: {page_url}")
+            
+            # Fetch page data
+            page_data = await self.fetch_page(page_url)
+            if not page_data:
+                logger.error(f"Failed to fetch page {page_number}, skipping")
+                continue
+            
+            # Process all records in this page
+            results = page_data.get('results', [])
+            logger.info(f"Processing {len(results)} facilities from page {page_number}")
+            
+            # Process facilities in smaller batches to avoid overwhelming Supabase
+            for i in range(0, len(results), self.config.batch_size):
+                batch = results[i:i + self.config.batch_size]
+                
+                # Process batch concurrently but with limited concurrency
+                semaphore = asyncio.Semaphore(self.config.max_concurrent)
+                
+                async def process_with_semaphore(record):
+                    async with semaphore:
+                        await self.process_facility(record)
+                
+                tasks = [process_with_semaphore(record) for record in batch]
+                await asyncio.gather(*tasks, return_exceptions=True)
+                
+                # Progress logging
+                if self.stats['total_processed'] % 50 == 0:
+                    logger.info(f"Progress: {self.stats['total_processed']} processed, "
+                              f"{self.stats['facilities_created']} created, "
+                              f"{self.stats['facilities_updated']} updated, "
+                              f"{self.stats['errors']} errors")
+                
+                # Rate limiting between batches
+                if self.config.delay_between_requests > 0:
+                    await asyncio.sleep(self.config.delay_between_requests)
+            
+            processed_pages += 1
+            logger.info(f"Completed page {page_number}")
+            
+            # Add a small delay between pages
+            await asyncio.sleep(self.config.delay_between_requests)
+        
+        elapsed = time.time() - start_time
+        logger.info(f"Crawl completed {processed_pages} pages in {elapsed:.2f} seconds")
+
     async def crawl_all(self):
         """Main crawling method - processes all pages"""
         logger.info("Starting Cortico API crawl")

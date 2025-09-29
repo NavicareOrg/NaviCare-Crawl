@@ -31,6 +31,15 @@ python main.py --mode full
 python main.py --mode test --page 1
 ```
 
+### Page Range Crawler
+```bash
+# Run crawl for specific page range
+python crawl_page_range.py --start-page 1 --end-page 10
+
+# With custom parameters
+python crawl_page_range.py --start-page 1 --end-page 10 --batch-size 50 --delay 0.5
+```
+
 ### Availability Updater
 ```bash
 # Update only availability information (for daily GitHub Actions)
@@ -51,15 +60,30 @@ python reset_database.py
 The repository includes GitHub Actions workflows for automated data updates:
 
 ### 1. Full Data Crawl (cortico-crawl.yml)
-- Runs twice daily (7:00 AM and 7:00 PM EDT)
+- Runs weekly on Sunday at 03:00 UTC
 - Performs complete data crawl and update
 - Updates all facility information including details, services, hours, etc.
+- Cleans up old observation data
 
 ### 2. Availability-Only Update (update-availability.yml)
-- Runs once daily (between the two full crawls)
+- Runs daily at 17:00 UTC
 - Updates only the availability information for existing facilities
 - Lightweight operation that runs faster than full crawl
-- Does not modify non-availability fields
+- Does not clean up old data or modify non-availability fields
+
+### 3. Segmented Crawl (segmented-crawl.yml)
+- Runs automatically from Sunday to Wednesday at 03:00 UTC
+- Each day processes a different segment (50 pages per segment)
+- Segment 1: Sunday (pages 1-50)
+- Segment 2: Monday (pages 51-100)
+- Segment 3: Tuesday (pages 101-150)
+- Segment 4: Wednesday (pages 151-200)
+- Prevents GitHub Actions 6-hour timeout by breaking work into smaller chunks
+
+### 4. Segment Coordinator (segment-coordinator.yml)
+- Runs Thursday at 03:00 UTC after all segments complete
+- Performs coordination tasks after all segments finish
+- Can include database consistency checks, reporting, etc.
 
 To use the GitHub Actions workflows:
 

@@ -1,0 +1,96 @@
+name: Segmented Crawl
+
+on:
+  schedule:
+    # Segment 1: Sunday at 03:00 UTC
+    - cron: '0 3 * * 0'
+    # Segment 2: Monday at 03:00 UTC
+    - cron: '0 3 * * 1'
+    # Segment 3: Tuesday at 03:00 UTC
+    - cron: '0 3 * * 2'
+    # Segment 4: Wednesday at 03:00 UTC
+    - cron: '0 3 * * 3'
+  workflow_dispatch:
+    inputs:
+      segment:
+        description: 'Segment number (1-4)'
+        required: true
+        default: '1'
+
+jobs:
+  segmented-crawl:
+    runs-on: ubuntu-latest
+    env:
+      CRAWLER_BATCH_SIZE: 50
+      CRAWLER_MAX_CONCURRENT: 5
+      CRAWLER_DELAY: 0.5
+      CRAWLER_MAX_RETRIES: 3
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Determine segment based on day of week
+        id: determine-segment
+        run: |
+          DAY_OF_WEEK=$(date -u +%w)
+          echo "Day of week: $DAY_OF_WEEK"
+          SEGMENT=1
+          case $DAY_OF_WEEK in
+            0) SEGMENT=1 ;;  # Sunday
+            1) SEGMENT=2 ;;  # Monday
+            2) SEGMENT=3 ;;  # Tuesday
+            3) SEGMENT=4 ;;  # Wednesday
+            *) SEGMENT=1 ;;  # Default to segment 1
+          esac
+          echo "segment=$SEGMENT" >> $GITHUB_OUTPUT
+
+      - name: Run segmented crawl
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          CORTICO_API_URL: ${{ vars.CORTICO_API_URL }}
+        run: |
+          # Use manually specified segment if provided, otherwise use auto-determined segment
+          if [ "${{ github.event.inputs.segment }}" != "" ]; then
+            SEGMENT=${{ github.event.inputs.segment }}
+          else
+            SEGMENT=${{ steps.determine-segment.outputs.segment }}
+          fi
+          
+          # Define page ranges for each segment
+          case $SEGMENT in
+            1)
+              START_PAGE=1
+              END_PAGE=50
+              ;;
+            2)
+              START_PAGE=51
+              END_PAGE=100
+              ;;
+            3)
+              START_PAGE=101
+              END_PAGE=150
+              ;;
+            4)
+              START_PAGE=151
+              END_PAGE=200
+              ;;
+            *)
+              START_PAGE=1
+              END_PAGE=50
+              ;;
+          esac
+          
+          echo "Processing segment $SEGMENT (pages $START_PAGE-$END_PAGE)"
+          python crawl_page_range.py --start-page $START_PAGE --end-page $END_PAGE
