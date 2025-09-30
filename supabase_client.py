@@ -276,7 +276,18 @@ class SupabaseClient:
     async def insert_availability(self, availability_data: Dict) -> bool:
         """Insert facility service availability"""
         try:
-            # Deduplicate by facility_id + available_at if provided
+            # If a list of availability records is provided, insert in bulk
+            if isinstance(availability_data, list):
+                if not availability_data:
+                    return True
+                response = (
+                    self.client.table("facility_availability")
+                    .insert(availability_data)
+                    .execute()
+                )
+                return bool(getattr(response, 'data', None))
+
+            # Single record path (dict) - deduplicate by facility_id + available_at if provided
             facility_id = availability_data.get('facility_id')
             available_at = availability_data.get('available_at')
 
@@ -307,7 +318,7 @@ class SupabaseClient:
                 .execute()
             )
 
-            return len(response.data) > 0
+            return bool(getattr(response, 'data', None))
             
         except APIError as e:
             logger.error(f"Error inserting availability: {e}")

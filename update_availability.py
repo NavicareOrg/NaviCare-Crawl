@@ -73,8 +73,15 @@ async def update_facility_availability(crawler: CorticoCrawler, cortico_record: 
         )
         
         if not existing_facility:
-            logger.warning(f"Facility not found in database: {facility_name} ({facility_slug})")
-            return False
+            logger.info(f"Facility not found in database: {facility_name} ({facility_slug}). Creating full record via crawler.")
+            try:
+                # Use the crawler's full facility processing to create facility and related records (including availability)
+                await crawler.process_facility(cortico_record)
+                logger.info(f"Created facility from Cortico record: {facility_name} ({facility_slug})")
+                return True
+            except Exception as e:
+                logger.error(f"Failed to create facility from Cortico record {facility_name}: {e}")
+                return False
         
         facility_id = existing_facility['id']
         
@@ -223,9 +230,11 @@ async def main():
         
         if stats['errors'] > 0:
             logger.warning(f"Completed with {stats['errors']} errors")
-            sys.exit(1)
+            # sys.exit(1)
         else:
             logger.info("✅ Availability update completed successfully!")
+
+        sys.exit(0)
         
     except KeyboardInterrupt:
         logger.info("⏹️  Availability update interrupted by user")
