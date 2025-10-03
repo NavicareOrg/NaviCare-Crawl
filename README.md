@@ -51,12 +51,6 @@ python crawl_page_range.py --start-page 1 --end-page 10 --batch-size 50 --delay 
 # Update only availability information (for daily GitHub Actions)
 python update_availability.py
 
-# Update only lab availability information
-python update_lab_availability.py
-
-# Update only pharmacy availability information
-python update_pharmacy_availability.py
-
 # With custom parameters
 python update_availability.py --batch-size 50 --delay 0.5
 ```
@@ -110,17 +104,7 @@ The repository includes GitHub Actions workflows for automated data updates:
 - Segment 4: Wednesday (pages 151-200)
 - Prevents GitHub Actions 6-hour timeout by breaking work into smaller chunks
 
-### 6. Lab Availability Update (update-lab-availability.yml)
-- Runs daily at 17:00 UTC
-- Updates only the availability information for existing lab facilities
-- Lightweight operation that runs faster than full crawl
-
-### 7. Pharmacy Availability Update (update-pharmacy-availability.yml)
-- Runs daily at 17:00 UTC
-- Updates only the availability information for existing pharmacy facilities
-- Lightweight operation that runs faster than full crawl
-
-### 8. Segment Coordinator (segment-coordinator.yml)
+### 6. Segment Coordinator (segment-coordinator.yml)
 - Runs Thursday at 03:00 UTC after all segments complete
 - Performs coordination tasks after all segments finish
 - Can include database consistency checks, reporting, etc.
