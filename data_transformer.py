@@ -449,40 +449,6 @@ class CorticoTransformer:
 
     @staticmethod
     def _determine_facility_type(specialties: List[str], workflows: List[Dict]) -> str:
-        # """Determine facility type based on specialties and workflows"""
-        # # Defensive: Ensure inputs are iterables
-        # specialties = specialties or []
-        # workflows = workflows or []
-        
-        # specialties_str = ' '.join(str(s).lower() for s in specialties if s is not None)
-        
-        # # Check for specific facility types
-        # if 'emergency' in specialties_str:
-        #     return 'emergency_room'
-        # elif 'urgent' in specialties_str:
-        #     return 'urgent_care'
-        # elif 'walk-in' in specialties_str or 'walk in' in specialties_str:
-        #     return 'walk_in_clinic'
-        # elif 'dental' in specialties_str:
-        #     return 'dental_clinic'
-        # elif 'mental health' in specialties_str or 'psychology' in specialties_str:
-        #     return 'mental_health_center'
-        # elif 'rehabilitation' in specialties_str or 'physiotherapy' in specialties_str:
-        #     return 'rehabilitation_center'
-        # elif 'pharmacy' in specialties_str:
-        #     return 'pharmacy'
-        # elif 'vision' in specialties_str or 'eye' in specialties_str:
-        #     return 'vision_center'
-        
-        # # Check workflows for additional clues
-        # workflow_types = [w.get('workflow_type', '') for w in workflows if isinstance(w, dict)]
-        # workflow_slugs = [w.get('slug', '') for w in workflows if isinstance(w, dict)]
-        
-        # if 'terminal-walk-in' in workflow_types or 'terminal' in workflow_slugs:
-        #     return 'walk_in_clinic'
-        # elif 'urgent-care' in workflow_slugs:
-        #     return 'urgent_care'
-        
         # Default to clinic for most cases
         return 'clinic'
 

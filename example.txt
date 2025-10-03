@@ -1,0 +1,212 @@
+For labs: https://cerebro-release.cortico.ca/api/laboratories/
+"id": 4230,
+            "name": "Fraser Health Authority",
+            "slug": "fraser-health-authority-4230",
+            "status": "",
+            "address": "1275 7th Avenue",
+            "city": "Hope",
+            "province": "BC",
+            "postal_code": "V0X 1L4",
+            "country": "Canada",
+            "phone_number": "6048607702",
+            "fax_number": "",
+            "specialties": [
+                "Laboratory Services"
+            ],
+            "operating_hours": {
+                "Friday": "Fri 07:30 - 15:30",
+                "Monday": "Mon 07:30 - 15:30",
+                "Tuesday": "Tue 07:30 - 15:30",
+                "Thursday": "Thu 07:30 - 15:30",
+                "Wednesday": "Wed 07:30 - 15:30",
+                "Statutory Holidays": "Closed statutory holidays"
+            },
+            "email": null,
+            "website": null,
+            "metadata": {
+                "website": "https://www.fraserhealth.ca/labs",
+                "language": "",
+                "wheelchair": "Y",
+                "email_address": ""
+            },
+            "latitude": "49.376899",
+            "longitude": "-121.42435",
+            "cortico_listing_url": "https://cortico.health/laboratories/hope-bc/fraser-health-authority-4230"
+
+
+For Pharmacies: https://cerebro-release.cortico.ca/api/summary/pharmacies/
+"id": 10556,
+            "name": "Rexall College Park Toronto",
+            "pharmacy_code": "P10556",
+            "slug": "rexall-college-park-toronto-p10556",
+            "status": "Pilot",
+            "human_readable_info": null,
+            "address": "777 Bay Street, Unit C216",
+            "city": "Toronto",
+            "province": "ON",
+            "postal_code": "M5G 2C8",
+            "country": "Canada",
+            "phone_number": "4169776899",
+            "fax_number": "4169770596",
+            "operating_hours": {},
+            "email": "0745rx@rexall.ca",
+            "website": "http://www.rexall.ca/storelocator/store/745/",
+            "metadata": {},
+            "keywords": "Rexall College Park Toronto  777 Bay Street, Unit C216",
+            "description": "",
+            "brochure": null,
+            "latitude": "43.660639",
+            "longitude": "-79.38538",
+            "is_delivery_pharmacy": false,
+            "owner": null,
+            "delivery_zone": null,
+            "delivery_instructions_url": null,
+            "is_free_delivery": false,
+            "is_same_day_delivery": false,
+            "same_day_delivery_cutoff_policy": "",
+            "dispensing_fee": null,
+            "prescription_booking_notification": false,
+            "cortico_listing_url": "https://cortico.health/pharmacies/toronto-on/rexall-college-park-toronto-p10556"
+
+
+For clinics:
+ "id": 40712,
+            "clinic_name": "South Barrie Medical Clinic",
+            "clinic_slug": "south-barrie-medical-clinic-40712",
+            "clinic_address": "320 Yonge St",
+            "clinic_city": "Barrie",
+            "clinic_province": "ON",
+            "clinic_country": "Canada",
+            "status": "Billed",
+            "host": "southbarrie.cortico.ca",
+            "booking_url": "southbarrie.cortico.ca/book/",
+            "availability": {
+                "specific-doctor-walk-in_clinic": "2025-10-03T11:00:00Z",
+                "family-doctor_clinic": "2025-10-03T09:40:00Z"
+            },
+            "workflows": [
+                {
+                    "slug": "family-doctor",
+                    "has_phone": false,
+                    "has_video": false,
+                    "categories": [],
+                    "has_clinic": true,
+                    "display_name": "Family Doctor",
+                    "workflow_type": "family-doctor",
+                    "has_home_visit": false,
+                    "scope_description": "",
+                    "allow_new_patients": false
+                },
+                {
+                    "slug": "pap-smear",
+                    "has_phone": false,
+                    "has_video": false,
+                    "categories": [],
+                    "has_clinic": true,
+                    "display_name": "Pap Smear",
+                    "workflow_type": "non-rostered",
+                    "has_home_visit": false,
+                    "scope_description": "",
+                    "allow_new_patients": false
+                },
+                {
+                    "slug": "meet-and-greet",
+                    "has_phone": false,
+                    "has_video": false,
+                    "categories": [],
+                    "has_clinic": true,
+                    "display_name": "Vaccinations",
+                    "workflow_type": "non-rostered",
+                    "has_home_visit": false,
+                    "scope_description": "For new patients",
+                    "allow_new_patients": true
+                },
+                {
+                    "slug": "specific-doctor-walk-in",
+                    "has_phone": false,
+                    "has_video": false,
+                    "categories": [],
+                    "has_clinic": true,
+                    "display_name": "Walk In",
+                    "workflow_type": "non-rostered",
+                    "has_home_visit": false,
+                    "scope_description": "",
+                    "allow_new_patients": true
+                }
+            ],
+            "phone_number": "7057223013",
+            "website": "https://barriepeoplespharmacy.ca",
+            "specialties": [
+                "Walk-in",
+                "Cardiologist",
+                "Infectious Disease Specialist",
+                "Urologist"
+            ],
+            "metadata": {
+                "website_reference": [
+                    "{\"https://barriepeoplespharmacy.ca/south-barrie-clinic\"}"
+                ],
+                "number_of_providers": 1
+            },
+            "has_telehealth": false,
+            "accepts_new_patients": true,
+            "is_bookable_online": true,
+            "cortico_listing_url": "https://cortico.health/clinics/barrie-on/south-barrie-medical-clinic-40712",
+            "top_level_categories": [
+                "Primary Care",
+                "Specialist Medicine",
+                "Pharmacy"
+            ],
+            "main_services": [
+                "General Medical Care",
+                "Family Medicine",
+                "Chronic Disease Management",
+                "Mental Health & Addiction Support",
+                "Preventive Health Services",
+                "Walk-In Clinic",
+                "Fill a New Prescription",
+                "Refill Prescription",
+                "Transfer Prescription",
+                "Pharmacy Services"
+            ],
+            "description": "South Barrie Medical Clinic in Barrie, Ontario offers primary care, chronic disease management, mental health support, and specialist services.",
+            "alt_phones": {
+                "7057224556": "Pharmacy"
+            },
+            "service_area": "Barrie community",
+            "referral_for_providers": {
+                "how_to_refer": null,
+                "urgency_levels": null,
+                "referral_process": null,
+                "patient_age_range": null,
+                "average_wait_times": null,
+                "referral_form_link": null,
+                "required_documents": null,
+                "specific_referral_forms": null
+            },
+            "other_clinics_metadata": {
+                "emr_used": null,
+                "facilities": "Pharmacy",
+                "parking_info": null,
+                "accreditations": null,
+                "research_involvement": null,
+                "hospital_affiliations": null
+            },
+            "accessibility": {
+                "access_notes": null,
+                "elevator_access": null,
+                "accessible_parking": null,
+                "hearing_assistance": null,
+                "wheelchair_accessible": null
+            },
+            "communication": {
+                "contact_method_patients": "email or online booking",
+                "contact_method_providers": null,
+                "how_to_book_for_patients": "Patients can book an appointment with doctors or pharmacists by clicking the 'BOOK AN APPOINTMENT' button on the clinic's website, or manage existing appointments through the Patient Portal."
+            },
+            "relocation_metadata": {
+                "is_relocated": null,
+                "relocation_text": null,
+                "relocation_details": null
+            }
+        
