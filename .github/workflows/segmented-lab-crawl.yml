@@ -93,4 +93,4 @@ jobs:
           esac
           
           echo "Processing segment $SEGMENT (pages $START_PAGE-$END_PAGE)"
-          python crawl_lab_page_range.py --start-page $START_PAGE --end-page $END_PAGE
+          python scripts/crawl_lab_page_range.py --start-page $START_PAGE --end-page $END_PAGE
