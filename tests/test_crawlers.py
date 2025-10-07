@@ -13,7 +13,7 @@ load_dotenv()
 async def test_clinic_crawler():
     """Test the clinic crawler"""
     try:
-        from cortico_crawler import CorticoCrawler, CrawlConfig
+        from crawlers import CorticoCrawler, CrawlConfig
         config = CrawlConfig(
             base_url=os.getenv('CORTICO_API_URL'),
             batch_size=2,  # Small batch for testing
@@ -39,7 +39,7 @@ async def test_clinic_crawler():
 async def test_lab_crawler():
     """Test the lab crawler"""
     try:
-        from lab_crawler import LabCrawler, LabCrawlConfig
+        from crawlers import LabCrawler, LabCrawlConfig
         config = LabCrawlConfig(
             base_url=os.getenv('CORTICO_API_URL_LAB'),
             batch_size=2,  # Small batch for testing
@@ -65,7 +65,7 @@ async def test_lab_crawler():
 async def test_pharmacy_crawler():
     """Test the pharmacy crawler"""
     try:
-        from pharmacy_crawler import PharmacyCrawler, PharmacyCrawlConfig
+        from crawlers import PharmacyCrawler, PharmacyCrawlConfig
         config = PharmacyCrawlConfig(
             base_url=os.getenv('CORTICO_API_URL_PHARMACY'),
             batch_size=2,  # Small batch for testing

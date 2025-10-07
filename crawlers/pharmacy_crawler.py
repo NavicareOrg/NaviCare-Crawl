@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-NaviCare Lab Crawler
-Scrapes laboratory data from Cortico Health API and transforms it for NaviCare database
+NaviCare Pharmacy Crawler
+Scrapes pharmacy data from Cortico Health API and transforms it for NaviCare database
 """
 
 import asyncio
@@ -13,8 +13,8 @@ from dataclasses import dataclass
 import time
 from urllib.parse import urljoin
 
-from supabase_client import SupabaseClient
-from data_transformer import DataValidator
+from utils.supabase_client import SupabaseClient
+from utils.data_transformer import DataValidator
 
 # Configure logging
 logging.basicConfig(
@@ -24,27 +24,27 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 @dataclass
-class LabCrawlConfig:
-    """Configuration for the lab crawler"""
-    base_url: str = "http://cerebro-release.cortico.ca/api/laboratories/"
+class PharmacyCrawlConfig:
+    """Configuration for the pharmacy crawler"""
+    base_url: str = "http://cerebro-release.cortico.ca/api/summary/pharmacies/"
     batch_size: int = 50  # Smaller batches for Supabase
     max_concurrent: int = 3  # Conservative for Supabase API limits
     delay_between_requests: float = 1.0  # seconds
     max_retries: int = 3
 
-class LabTransformer:
-    """Transforms Lab API data to NaviCare format"""
+class PharmacyTransformer:
+    """Transforms Pharmacy API data to NaviCare format"""
     
     @staticmethod
-    def transform_lab(lab_data: Dict) -> Dict:
-        """Transform Lab API data to NaviCare facility format"""
+    def transform_pharmacy(pharmacy_data: Dict) -> Dict:
+        """Transform Pharmacy API data to NaviCare facility format"""
         # Defensive: if the source payload is not a dict, return safe defaults
-        if not isinstance(lab_data, dict):
-            logger.warning(f"transform_lab received non-dict lab_data: {type(lab_data)}. Returning empty facility data.")
+        if not isinstance(pharmacy_data, dict):
+            logger.warning(f"transform_pharmacy received non-dict pharmacy_data: {type(pharmacy_data)}. Returning empty facility data.")
             return {
                 'name': '',
                 'slug': '',
-                'facility_type': 'laboratory',
+                'facility_type': 'pharmacy',
                 'website': None,
                 'email': None,
                 'phone': None,
@@ -60,49 +60,48 @@ class LabTransformer:
                 'status': 'active'
             }
 
-        # Generate slug from lab name
-        lab_name = lab_data.get('name', '')
-        slug = lab_data.get('slug') or LabTransformer._generate_slug(lab_name)
+        # Generate slug from pharmacy name
+        pharmacy_name = pharmacy_data.get('name', '')
+        slug = pharmacy_data.get('slug') or PharmacyTransformer._generate_slug(pharmacy_name)
         
         # Extract coordinates
-        longitude = lab_data.get('longitude')
-        latitude = lab_data.get('latitude')
+        longitude = pharmacy_data.get('longitude')
+        latitude = pharmacy_data.get('latitude')
         
-        # Extract metadata
-        metadata = lab_data.get('metadata', {})
+        # Extract delivery information
+        is_delivery_pharmacy = pharmacy_data.get('is_delivery_pharmacy', False)
         
         return {
-            'name': lab_name.strip() if lab_name else '',
+            'name': pharmacy_name.strip() if pharmacy_name else '',
             'slug': slug,
-            'facility_type': 'laboratory',
-            'website': metadata.get('website') or lab_data.get('website'),
-            'email': lab_data.get('email'),
-            'phone': LabTransformer._clean_phone(lab_data.get('phone_number')),
-            'address_line1': lab_data.get('address', ''),
-            'city': lab_data.get('city', ''),
-            'province': lab_data.get('province', ''),
-            'country': lab_data.get('country', 'Canada'),
+            'facility_type': 'pharmacy',
+            'website': pharmacy_data.get('website'),
+            'email': pharmacy_data.get('email'),
+            'phone': PharmacyTransformer._clean_phone(pharmacy_data.get('phone_number')),
+            'address_line1': pharmacy_data.get('address', ''),
+            'city': pharmacy_data.get('city', ''),
+            'province': pharmacy_data.get('province', ''),
+            'country': pharmacy_data.get('country', 'Canada'),
             'longitude': longitude,
             'latitude': latitude,
-            'accepts_new_patients': False,  # Labs typically don't accept new patients directly
-            'is_bookable_online': bool(metadata.get('website')),
-            'has_telehealth': False,  # Labs typically don't offer telehealth
+            'accepts_new_patients': False,  # Pharmacies typically don't accept new patients directly
+            'is_bookable_online': bool(pharmacy_data.get('website')),
+            'has_telehealth': False,  # Pharmacies typically don't offer telehealth
             'status': 'active'
         }
 
     @staticmethod
-    def transform_booking_channels(facility_id: str, lab_data: Dict) -> List[Dict]:
-        """Transform Lab booking data to booking channels"""
+    def transform_booking_channels(facility_id: str, pharmacy_data: Dict) -> List[Dict]:
+        """Transform Pharmacy booking data to booking channels"""
         channels = []
         
         # Add website as a booking channel if available
-        metadata = lab_data.get('metadata', {})
-        website = metadata.get('website') or lab_data.get('website')
+        website = pharmacy_data.get('website')
         if website:
             channels.append({
                 'facility_id': facility_id,
                 'channel_type': 'web',
-                'label': 'Lab Website',
+                'label': 'Pharmacy Website',
                 'url': website,
                 'external_provider': 'cortico',
                 'is_active': True,
@@ -110,13 +109,25 @@ class LabTransformer:
             })
         
         # Add phone as a booking channel if available
-        phone = lab_data.get('phone_number')
+        phone = pharmacy_data.get('phone_number')
         if phone:
             channels.append({
                 'facility_id': facility_id,
                 'channel_type': 'phone',
                 'label': 'Phone Contact',
-                'phone': LabTransformer._clean_phone(phone),
+                'phone': PharmacyTransformer._clean_phone(phone),
+                'is_active': True,
+                'last_checked_at': datetime.now(timezone.utc).isoformat()
+            })
+        
+        # Add email as a booking channel if available
+        email = pharmacy_data.get('email')
+        if email:
+            channels.append({
+                'facility_id': facility_id,
+                'channel_type': 'email',
+                'label': 'Email Contact',
+                'email': email,
                 'is_active': True,
                 'last_checked_at': datetime.now(timezone.utc).isoformat()
             })
@@ -134,7 +145,7 @@ class LabTransformer:
         """Generate URL-friendly slug from facility name"""
         import re
         if not name:
-            return f"lab-{datetime.now().timestamp()}"
+            return f"pharmacy-{datetime.now().timestamp()}"
         
         slug = re.sub(r'[^\w\s-]', '', name.lower())
         slug = re.sub(r'[-\s]+', '-', slug)
@@ -158,8 +169,8 @@ class LabTransformer:
         return phone  # Return original if can't format
 
 
-class LabCrawler:
-    def __init__(self, config: LabCrawlConfig):
+class PharmacyCrawler:
+    def __init__(self, config: PharmacyCrawlConfig):
         self.config = config
         self.db_client = None
         self.session = None
@@ -187,7 +198,7 @@ class LabCrawler:
         connector = aiohttp.TCPConnector(limit=self.config.max_concurrent)
         self.session = aiohttp.ClientSession(timeout=timeout, connector=connector)
         
-        logger.info("Lab Crawler initialized successfully")
+        logger.info("Pharmacy Crawler initialized successfully")
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
@@ -198,7 +209,7 @@ class LabCrawler:
         # Print final statistics
         await self._print_final_stats()
         
-        logger.info(f"Lab Crawler shutdown. Final stats: {self.stats}")
+        logger.info(f"Pharmacy Crawler shutdown. Final stats: {self.stats}")
 
     async def fetch_page(self, page_url: str) -> Optional[Dict]:
         """Fetch a single page from the API with retry logic"""
@@ -228,16 +239,16 @@ class LabCrawler:
         self.stats['errors'] += 1
         return None
 
-    async def process_lab(self, lab_record: Dict):
-        """Process a single lab record"""
+    async def process_pharmacy(self, pharmacy_record: Dict):
+        """Process a single pharmacy record"""
         try:
-            # Transform lab data
-            facility_data = LabTransformer.transform_lab(lab_record)
+            # Transform pharmacy data
+            facility_data = PharmacyTransformer.transform_pharmacy(pharmacy_record)
             
             # Validate facility data
             is_valid, validation_errors = DataValidator.validate_facility(facility_data)
             if not is_valid:
-                logger.warning(f"Validation failed for lab {facility_data.get('name')}: {validation_errors}")
+                logger.warning(f"Validation failed for pharmacy {facility_data.get('name')}: {validation_errors}")
                 self.stats['validation_errors'] += 1
                 return
             
@@ -258,29 +269,24 @@ class LabCrawler:
                 self.stats['facilities_created'] += 1
             
             # Process booking channels
-            booking_channels = LabTransformer.transform_booking_channels(facility_id, lab_record)
+            booking_channels = PharmacyTransformer.transform_booking_channels(facility_id, pharmacy_record)
             for channel in booking_channels:
                 if await self.db_client.insert_booking_channel(channel):
                     self.stats['booking_channels_created'] += 1
             
-            # Process specialties
-            specialties = lab_record.get('specialties', [])
-            if specialties:
-                await self.db_client.link_facility_specialties(facility_id, specialties)
-            
             # Process operating hours
-            await self.process_facility_hours(facility_id, lab_record.get('operating_hours'))
+            await self.process_facility_hours(facility_id, pharmacy_record.get('operating_hours'))
             
             self.stats['total_processed'] += 1
             
         except Exception as e:
-            logger.error(f"Error processing lab {lab_record.get('name', 'Unknown')}: {e}")
+            logger.error(f"Error processing pharmacy {pharmacy_record.get('name', 'Unknown')}: {e}")
             self.stats['errors'] += 1
 
     async def process_facility_hours(self, facility_id: str, operating_hours: Optional[Dict]):
         """Process operating hours for a facility"""
         try:
-            hour_records = LabTransformer.transform_operating_hours(facility_id, operating_hours)
+            hour_records = PharmacyTransformer.transform_operating_hours(facility_id, operating_hours)
 
             if await self.db_client.replace_facility_hours(facility_id, hour_records):
                 self.stats['facility_hours_records_created'] += len(hour_records)
@@ -292,7 +298,7 @@ class LabCrawler:
 
     async def crawl_page_range(self, start_page: int, end_page: int):
         """Crawl a specific range of pages"""
-        logger.info(f"Starting Lab API crawl for pages {start_page} to {end_page}")
+        logger.info(f"Starting Pharmacy API crawl for pages {start_page} to {end_page}")
         start_time = time.time()
         
         processed_pages = 0
@@ -310,9 +316,9 @@ class LabCrawler:
             
             # Process all records in this page
             results = page_data.get('results', [])
-            logger.info(f"Processing {len(results)} labs from page {page_number}")
+            logger.info(f"Processing {len(results)} pharmacies from page {page_number}")
             
-            # Process labs in smaller batches to avoid overwhelming Supabase
+            # Process pharmacies in smaller batches to avoid overwhelming Supabase
             for i in range(0, len(results), self.config.batch_size):
                 batch = results[i:i + self.config.batch_size]
                 
@@ -321,7 +327,7 @@ class LabCrawler:
                 
                 async def process_with_semaphore(record):
                     async with semaphore:
-                        await self.process_lab(record)
+                        await self.process_pharmacy(record)
                 
                 tasks = [process_with_semaphore(record) for record in batch]
                 await asyncio.gather(*tasks, return_exceptions=True)
@@ -344,11 +350,11 @@ class LabCrawler:
             await asyncio.sleep(self.config.delay_between_requests)
         
         elapsed = time.time() - start_time
-        logger.info(f"Lab crawl completed {processed_pages} pages in {elapsed:.2f} seconds")
+        logger.info(f"Pharmacy crawl completed {processed_pages} pages in {elapsed:.2f} seconds")
 
     async def crawl_all(self):
         """Main crawling method - processes all pages"""
-        logger.info("Starting Lab API crawl")
+        logger.info("Starting Pharmacy API crawl")
         start_time = time.time()
         
         current_url = f"{self.config.base_url}?format=json"
@@ -366,9 +372,9 @@ class LabCrawler:
             
             # Process all records in this page
             results = page_data.get('results', [])
-            logger.info(f"Processing {len(results)} labs from page {page_count}")
+            logger.info(f"Processing {len(results)} pharmacies from page {page_count}")
             
-            # Process labs in smaller batches to avoid overwhelming Supabase
+            # Process pharmacies in smaller batches to avoid overwhelming Supabase
             for i in range(0, len(results), self.config.batch_size):
                 batch = results[i:i + self.config.batch_size]
                 
@@ -377,7 +383,7 @@ class LabCrawler:
                 
                 async def process_with_semaphore(record):
                     async with semaphore:
-                        await self.process_lab(record)
+                        await self.process_pharmacy(record)
                 
                 tasks = [process_with_semaphore(record) for record in batch]
                 await asyncio.gather(*tasks, return_exceptions=True)
@@ -402,12 +408,12 @@ class LabCrawler:
             logger.info(f"Completed page {page_count} of {total_pages}")
         
         elapsed = time.time() - start_time
-        logger.info(f"Lab crawl completed in {elapsed:.2f} seconds")
+        logger.info(f"Pharmacy crawl completed in {elapsed:.2f} seconds")
 
     async def _print_final_stats(self):
         """Print comprehensive final statistics"""
         logger.info("=" * 60)
-        logger.info("FINAL LAB CRAWL STATISTICS")
+        logger.info("FINAL PHARMACY CRAWL STATISTICS")
         logger.info("=" * 60)
         
         # Print our internal stats
@@ -435,7 +441,7 @@ class LabCrawler:
 
     async def crawl_single_page(self, page_number: int = 1):
         """Crawl a single page for testing purposes"""
-        logger.info(f"Starting single page lab crawl (page {page_number})")
+        logger.info(f"Starting single page pharmacy crawl (page {page_number})")
         
         url = f"{self.config.base_url}?format=json&page={page_number}"
         page_data = await self.fetch_page(url)
@@ -445,12 +451,12 @@ class LabCrawler:
             return
         
         results = page_data.get('results', [])
-        logger.info(f"Processing {len(results)} labs from page {page_number}")
+        logger.info(f"Processing {len(results)} pharmacies from page {page_number}")
         
         for record in results:
-            await self.process_lab(record)
+            await self.process_pharmacy(record)
         
-        logger.info(f"Single page lab crawl completed. Stats: {self.stats}")
+        logger.info(f"Single page pharmacy crawl completed. Stats: {self.stats}")
 
 async def main():
     """Main function for testing"""
@@ -464,13 +470,13 @@ async def main():
         logger.error("SUPABASE_URL and SUPABASE_KEY environment variables are required")
         return
     
-    config = LabCrawlConfig(
+    config = PharmacyCrawlConfig(
         delay_between_requests=0.5,  # Be respectful to the API
         max_concurrent=2,  # Conservative for testing
         batch_size=25  # Small batches for testing
     )
     
-    async with LabCrawler(config) as crawler:
+    async with PharmacyCrawler(config) as crawler:
         # For testing, crawl just one page
         await crawler.crawl_single_page(page_number=1)
         

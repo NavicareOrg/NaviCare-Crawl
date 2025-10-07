@@ -9,7 +9,7 @@ from typing import Iterable, Tuple, Union
 from dotenv import load_dotenv
 from postgrest import APIError
 
-from supabase_client import SupabaseClient
+from utils.supabase_client import SupabaseClient
 
 
 logging.basicConfig(

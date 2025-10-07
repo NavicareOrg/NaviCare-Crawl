@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-NaviCare Pharmacy Crawler Runner for Page Range
-Script to run the Pharmacy crawler for a specific page range
+NaviCare Lab Crawler Runner for Page Range
+Script to run the Lab crawler for a specific page range
 """
 
 import os
@@ -9,15 +9,15 @@ import sys
 import asyncio
 import argparse
 from dotenv import load_dotenv
-from pharmacy_crawler import PharmacyCrawler, PharmacyCrawlConfig
+from crawlers import LabCrawler, LabCrawlConfig
 
 # Load environment variables
 load_dotenv()
 
-def create_config_from_env() -> PharmacyCrawlConfig:
+def create_config_from_env() -> LabCrawlConfig:
     """Create crawler configuration from environment variables"""
-    return PharmacyCrawlConfig(
-        base_url=os.getenv('CORTICO_API_URL_PHARMACY'),
+    return LabCrawlConfig(
+        base_url=os.getenv('CORTICO_API_URL_LAB'),
         batch_size=int(os.getenv('CRAWLER_BATCH_SIZE', '50')),
         max_concurrent=int(os.getenv('CRAWLER_MAX_CONCURRENT', '5')),
         delay_between_requests=float(os.getenv('CRAWLER_DELAY', '0.5')),
@@ -38,19 +38,19 @@ def validate_environment():
     
     return True
 
-async def run_page_range_crawl(config: PharmacyCrawlConfig, start_page: int, end_page: int):
+async def run_page_range_crawl(config: LabCrawlConfig, start_page: int, end_page: int):
     """Run the crawl for a specific page range"""
-    print(f"🚀 Starting NaviCare Pharmacy Page Range Crawl (Pages {start_page}-{end_page})")
+    print(f"🚀 Starting NaviCare Lab Page Range Crawl (Pages {start_page}-{end_page})")
     print("=" * 50)
     
-    async with PharmacyCrawler(config) as crawler:
+    async with LabCrawler(config) as crawler:
         await crawler.crawl_page_range(start_page, end_page)
     
-    print("✅ Pharmacy page range crawl completed successfully!")
+    print("✅ Lab page range crawl completed successfully!")
 
 async def main():
     """Main runner function"""
-    parser = argparse.ArgumentParser(description='NaviCare Pharmacy Crawler - Page Range')
+    parser = argparse.ArgumentParser(description='NaviCare Lab Crawler - Page Range')
     parser.add_argument('--start-page', type=int, default=1,
                         help='Start page number (default: 1)')
     parser.add_argument('--end-page', type=int, required=True,

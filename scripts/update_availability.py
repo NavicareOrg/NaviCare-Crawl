@@ -15,9 +15,9 @@ import logging
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from cortico_crawler import CorticoCrawler, CrawlConfig
-from supabase_client import SupabaseClient
-from data_transformer import CorticoTransformer
+from crawlers import CorticoCrawler, CrawlConfig
+from utils.supabase_client import SupabaseClient
+from utils.data_transformer import CorticoTransformer
 
 # Configure logging
 logging.basicConfig(

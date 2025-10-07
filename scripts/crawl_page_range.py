@@ -9,7 +9,7 @@ import sys
 import asyncio
 import argparse
 from dotenv import load_dotenv
-from cortico_crawler import CorticoCrawler, CrawlConfig
+from crawlers import CorticoCrawler, CrawlConfig
 
 # Load environment variables
 load_dotenv()

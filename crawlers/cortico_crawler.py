@@ -13,8 +13,8 @@ from dataclasses import dataclass
 import time
 from urllib.parse import urljoin
 
-from supabase_client import SupabaseClient
-from data_transformer import CorticoTransformer, DataValidator
+from utils.supabase_client import SupabaseClient
+from utils.data_transformer import CorticoTransformer, DataValidator
 
 # Configure logging
 logging.basicConfig(
