@@ -35,4 +35,4 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           CORTICO_API_URL: ${{ vars.CORTICO_API_URL }}
-        run: python scripts/update_availability.py
+        run: python -m scripts.update_availability
