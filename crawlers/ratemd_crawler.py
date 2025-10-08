@@ -167,25 +167,7 @@ def scrape_detail(detail_url: str) -> Dict:
 
         try:
             json_data = json.loads(json_string)
-            # Handle both single object and array cases
-            if isinstance(json_data, list):
-                # Search through array for MedicalClinic object
-                for item in json_data:
-                    # if isinstance(item, dict) and item.get("@type") == "MedicalClinic" and "telephone" in item:
-                    #     data["phone"] = item.get("telephone", "N/A")
-                    #     logging.info(f"Found phone in JSON-LD array: {data['phone']}")
-
-                    if "geo" in item:
-                        data["longitude"] = item["geo"].get("longitude", "N/A")
-                        data["latitude"] = item["geo"].get("latitude", "N/A") 
-                        logging.info(f"Found geo in JSON-LD array: {data['latitude']}, {data['longitude']}")
-
-                    if data["phone"] != "N/A":
-                        break
-
-                else:
-                    continue
-            elif isinstance(json_data, dict) and json_data.get("@type") == "MedicalClinic" and "telephone" in json_data:
+            if isinstance(json_data, dict) and json_data.get("@type") == "MedicalClinic" and "telephone" in json_data:
                 data["phone"] = json_data.get("telephone", "N/A")
                 logging.info(f"Found phone in JSON-LD object: {data['phone']}")
 
@@ -362,4 +344,4 @@ def main():
     logging.info(f"Finished. Total clinics collected: {len(all_clinics)}. Saved to {OUTPUT_FILE}.")
 
 if __name__ == "__main__":
-    test_scrape_page(2)
+    main()
