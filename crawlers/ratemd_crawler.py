@@ -171,15 +171,38 @@ def scrape_detail(detail_url: str) -> Dict:
             if isinstance(json_data, list):
                 # Search through array for MedicalClinic object
                 for item in json_data:
-                    if isinstance(item, dict) and item.get("@type") == "MedicalClinic" and "telephone" in item:
-                        data["phone"] = item.get("telephone", "N/A")
-                        logging.info(f"Found phone in JSON-LD array: {data['phone']}")
+                    # if isinstance(item, dict) and item.get("@type") == "MedicalClinic" and "telephone" in item:
+                    #     data["phone"] = item.get("telephone", "N/A")
+                    #     logging.info(f"Found phone in JSON-LD array: {data['phone']}")
+
+                    if "geo" in item:
+                        data["longitude"] = item["geo"].get("longitude", "N/A")
+                        data["latitude"] = item["geo"].get("latitude", "N/A") 
+                        logging.info(f"Found geo in JSON-LD array: {data['latitude']}, {data['longitude']}")
+
+                    if data["phone"] != "N/A":
                         break
+
                 else:
                     continue
             elif isinstance(json_data, dict) and json_data.get("@type") == "MedicalClinic" and "telephone" in json_data:
                 data["phone"] = json_data.get("telephone", "N/A")
                 logging.info(f"Found phone in JSON-LD object: {data['phone']}")
+
+                if "address" in json_data and isinstance(json_data["address"], dict):
+                    address_locality = json_data["address"].get("addressLocality", "")
+                    if address_locality and ", " in address_locality:
+                        data["city"], data["province"] = address_locality.split(", ", 1)
+                    else:
+                        data["city"] = address_locality or "N/A"
+                        data["province"] = "N/A"
+
+                # Extract longitude and latitude from geo
+                if "geo" in json_data and isinstance(json_data["geo"], dict):
+                    data["longitude"] = json_data["geo"].get("longitude", "N/A")
+                    data["latitude"] = json_data["geo"].get("latitude", "N/A")
+                    logging.info(f"Found geo in JSON-LD object: {data['latitude']}, {data['longitude']}")
+
             if data["phone"] != "N/A":
                 break
         except json.JSONDecodeError as e:
@@ -208,8 +231,8 @@ def scrape_detail(detail_url: str) -> Dict:
                     logging.info(f"Found phone in tel: link: {data['phone']}")
 
     # Address (unchanged)
-    address = soup.find("div", class_="address")
-    data["address"] = address.get_text(strip=True) if address else "N/A"
+    # address = soup.find("div", class_="address")
+    # data["address"] = address.get_text(strip=True) if address else "N/A"
 
     # Rating & reviews (unchanged)
     reviews = soup.find("span", class_="reviews")
@@ -261,7 +284,10 @@ def scrape_page(page_number: int) -> List[Dict]:
             "name": name,
             "detail_url": detail_url,
             "phone": detail_data.get("phone", "N/A"),
-            "address": detail_data.get("address", "N/A"),
+            "city": detail_data.get("city", "N/A"),
+            "province": detail_data.get("province", "N/A"),
+            "longitude": detail_data.get("longitude", "N/A"),
+            "latitude": detail_data.get("latitude", "N/A"),
             "rating": detail_data.get("rating", "N/A"),
             "review_count": detail_data.get("review_count", "N/A"),
         })
@@ -336,4 +362,4 @@ def main():
     logging.info(f"Finished. Total clinics collected: {len(all_clinics)}. Saved to {OUTPUT_FILE}.")
 
 if __name__ == "__main__":
-    test_scrape_page(1)
+    test_scrape_page(2)
