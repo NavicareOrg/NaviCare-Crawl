@@ -1,16 +1,56 @@
-name: Run RateMDs Full Crawler
+name: Run RateMDs Segmented Crawler
 
 on:
-  # 允许从 GitHub 仓库的 Actions 标签页手动触发此工作流程
   workflow_dispatch:
-  
-  # 也可以添加定时运行 (例如每天凌晨 00:00 UTC)
-  # schedule:
-  #   - cron: '0 0 * * *'
+    inputs:
+      segment_size:
+        description: 'Number of pages per segment (default: 500)'
+        required: false
+        default: '500'
+      total_pages:
+        description: 'Total pages to scrape (default: 6000)'
+        required: false
+        default: '6000'
 
 jobs:
-  scrape_data:
+  # First job: Calculate segments
+  calculate_segments:
     runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Calculate segment ranges
+        id: set-matrix
+        run: |
+          SEGMENT_SIZE=${{ github.event.inputs.segment_size || 500 }}
+          TOTAL_PAGES=${{ github.event.inputs.total_pages || 6000 }}
+          
+          # Calculate segments
+          segments="["
+          for ((i=1; i<=TOTAL_PAGES; i+=SEGMENT_SIZE)); do
+            end=$((i + SEGMENT_SIZE - 1))
+            if [ $end -gt $TOTAL_PAGES ]; then
+              end=$TOTAL_PAGES
+            fi
+            if [ ${#segments} -gt 1 ]; then
+              segments+=","
+            fi
+            segments+="{\"start\":$i,\"end\":$end,\"name\":\"pages_${i}_${end}\"}"
+          done
+          segments+="]"
+          
+          echo "matrix=$segments" >> $GITHUB_OUTPUT
+          echo "Generated segments: $segments"
+
+  # Second job: Run scraper for each segment
+  scrape_segment:
+    needs: calculate_segments
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 3  # Run 3 segments in parallel to avoid rate limiting
+      fail-fast: false  # Continue other segments even if one fails
+      matrix:
+        segment: ${{ fromJson(needs.calculate_segments.outputs.matrix) }}
     
     steps:
       - name: Checkout repository code
@@ -19,30 +59,73 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          # 使用您的脚本支持的 Python 版本
-          python-version: '3.x' 
+          python-version: '3.x'
 
-      - name: Create requirements.txt and Install Dependencies
+      - name: Install Dependencies
         run: |
-          echo "cloudscraper" > requirements.txt
-          echo "beautifulsoup4" >> requirements.txt
-          echo "requests" >> requirements.txt
-          pip install -r requirements.txt
+          pip install cloudscraper beautifulsoup4 requests
 
-      - name: Run the full crawler script
-        # 运行修改后的脚本，它将调用 main() 爬取所有页并生成 JSON 文件
-        run: python ratemd_crawler.py
+      - name: Run crawler for segment ${{ matrix.segment.name }}
+        run: |
+          python ratemd_crawler.py ${{ matrix.segment.start }} ${{ matrix.segment.end }}
         
-      # -------------------------------------------------------------------
-      # 文件生成位置和持久化步骤
-      # -------------------------------------------------------------------
-      
-      - name: Upload JSON as Artifact
+      - name: Upload segment data as artifact
         uses: actions/upload-artifact@v4
         with:
-          # Artifact 的名称
-          name: ratemds-scraped-data
-          # 爬虫脚本中定义的输出文件名
-          path: ratemds_facilities.json
-          # 可选：设置 Artifact 的保留时间，例如 7 天
+          name: ratemds-${{ matrix.segment.name }}
+          path: ratemds_facilities_${{ matrix.segment.start }}_${{ matrix.segment.end }}.json
           retention-days: 7
+
+  # Third job: Merge all segments into one file
+  merge_results:
+    needs: scrape_segment
+    runs-on: ubuntu-latest
+    if: always()  # Run even if some segments failed
+    
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: segments
+          pattern: ratemds-pages_*
+          merge-multiple: false
+
+      - name: Merge JSON files
+        run: |
+          python3 << 'EOF'
+          import json
+          import os
+          from pathlib import Path
+
+          all_clinics = []
+          segments_dir = Path('segments')
+          
+          # Collect all JSON files
+          json_files = sorted(segments_dir.rglob('*.json'))
+          
+          print(f"Found {len(json_files)} segment files to merge")
+          
+          for json_file in json_files:
+              print(f"Processing {json_file}")
+              try:
+                  with open(json_file, 'r', encoding='utf-8') as f:
+                      data = json.load(f)
+                      if isinstance(data, list):
+                          all_clinics.extend(data)
+                          print(f"  Added {len(data)} clinics")
+              except Exception as e:
+                  print(f"  Error processing {json_file}: {e}")
+          
+          # Save merged result
+          with open('ratemds_facilities_complete.json', 'w', encoding='utf-8') as f:
+              json.dump(all_clinics, f, ensure_ascii=False, indent=2)
+          
+          print(f"\nTotal clinics merged: {len(all_clinics)}")
+          EOF
+
+      - name: Upload complete merged data
+        uses: actions/upload-artifact@v4
+        with:
+          name: ratemds-complete
+          path: ratemds_facilities_complete.json
+          retention-days: 30  # Keep final result longer
