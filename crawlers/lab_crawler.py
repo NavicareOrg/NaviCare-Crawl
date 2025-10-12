@@ -249,8 +249,8 @@ class LabCrawler:
                 facility_data.get('province', '')
             )
             
-            # Upsert facility
-            facility_id = await self.db_client.upsert_facility(facility_data)
+            # Upsert facility (pass existing data to avoid duplicate query)
+            facility_id = await self.db_client.upsert_facility(facility_data, existing)
             
             if existing:
                 self.stats['facilities_updated'] += 1

@@ -81,16 +81,17 @@ class SupabaseClient:
             logger.error(f"Error finding existing facility: {e}")
             return None
 
-    async def upsert_facility(self, facility_data: Dict) -> str:
+    async def upsert_facility(self, facility_data: Dict, existing: Optional[Dict] = None) -> str:
         """Insert or update facility and return facility ID"""
         try:
-            # Check if facility exists
-            existing = await self.find_existing_facility(
-                facility_data.get('slug', ''),
-                facility_data.get('name', ''),
-                facility_data.get('city', ''),
-                facility_data.get('province', '')
-            )
+            # Check if facility exists (use provided existing data or query if not provided)
+            if existing is None:
+                existing = await self.find_existing_facility(
+                    facility_data.get('slug', ''),
+                    facility_data.get('name', ''),
+                    facility_data.get('city', ''),
+                    facility_data.get('province', '')
+                )
             
             if existing:
                 # Update existing facility
