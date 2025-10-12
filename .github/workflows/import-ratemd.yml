@@ -1,0 +1,168 @@
+name: Import RateMD Data
+
+on:
+  workflow_dispatch:
+    inputs:
+      json_file:
+        description: 'JSON file path (default: ratemd.json)'
+        required: false
+        default: 'ratemd.json'
+        type: string
+      batch_size:
+        description: 'Batch size for processing (default: 100)'
+        required: false
+        default: '100'
+        type: string
+
+jobs:
+  import-ratemd-data:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install supabase python-dotenv
+        
+    - name: Verify JSON file exists
+      run: |
+        if [ ! -f "${{ github.event.inputs.json_file || 'ratemd.json' }}" ]; then
+          echo "Error: JSON file not found: ${{ github.event.inputs.json_file || 'ratemd.json' }}"
+          echo "Available files:"
+          ls -la *.json 2>/dev/null || echo "No JSON files found"
+          exit 1
+        fi
+        echo "✓ JSON file found: ${{ github.event.inputs.json_file || 'ratemd.json' }}"
+        
+    - name: Check JSON file size
+      run: |
+        FILE_SIZE=$(wc -c < "${{ github.event.inputs.json_file || 'ratemd.json' }}")
+        echo "JSON file size: $FILE_SIZE bytes"
+        if [ $FILE_SIZE -gt 1000000000 ]; then
+          echo "Warning: File is larger than 1GB, this may take a while to process"
+        fi
+        
+    - name: Validate JSON format
+      run: |
+        python -c "
+        import json
+        import sys
+        try:
+            with open('${{ github.event.inputs.json_file || 'ratemd.json' }}', 'r') as f:
+                data = json.load(f)
+            print(f'✓ JSON is valid, contains {len(data)} records')
+            if len(data) > 0:
+                print(f'✓ Sample record keys: {list(data[0].keys())}')
+        except Exception as e:
+            print(f'✗ JSON validation failed: {e}')
+            sys.exit(1)
+        "
+        
+    - name: Test Supabase connection
+      env:
+        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      run: |
+        python -c "
+        import os
+        import sys
+        sys.path.append('.')
+        from utils.supabase_client import SupabaseClient
+        import asyncio
+        
+        async def test():
+            client = SupabaseClient()
+            success = await client.test_connection()
+            if success:
+                print('✓ Supabase connection successful')
+            else:
+                print('✗ Supabase connection failed')
+                sys.exit(1)
+        
+        asyncio.run(test())
+        "
+        
+    - name: Run RateMD data import
+      env:
+        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      run: |
+        echo "Starting RateMD data import..."
+        echo "File: ${{ github.event.inputs.json_file || 'ratemd.json' }}"
+        echo "Batch size: ${{ github.event.inputs.batch_size || '100' }}"
+        echo ""
+        
+        python scripts/import_ratemd_data.py "${{ github.event.inputs.json_file || 'ratemd.json' }}"
+        
+    - name: Upload logs
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: ratemd-import-logs
+        path: |
+          ratemd_import.log
+        retention-days: 30
+        
+    - name: Get import statistics
+      env:
+        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      run: |
+        python -c "
+        import os
+        import sys
+        sys.path.append('.')
+        from utils.supabase_client import SupabaseClient
+        import asyncio
+        
+        async def get_stats():
+            client = SupabaseClient()
+            stats = await client.get_facility_stats()
+            print('=== Database Statistics ===')
+            print(f'Total facilities: {stats.get(\"total_facilities\", \"Unknown\")}')
+            print(f'Facility types: {stats.get(\"facility_types\", {})}')
+            print('========================')
+        
+        asyncio.run(get_stats())
+        "
+        
+    - name: Comment on workflow completion
+      if: always()
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          let logContent = '';
+          try {
+            logContent = fs.readFileSync('ratemd_import.log', 'utf8');
+            const lines = logContent.split('\n');
+            const lastLines = lines.slice(-20).join('\n');
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## RateMD Import Workflow Completed
+              
+              **Status**: ${{ job.status }}
+              **File**: ${{ github.event.inputs.json_file || 'ratemd.json' }}
+              **Batch Size**: ${{ github.event.inputs.batch_size || '100' }}
+              
+              ### Recent Log Entries:
+              \`\`\`
+              ${lastLines}
+              \`\`\`
+              
+              Check the workflow logs for full details and download the log artifact for complete information.`
+            });
+          } catch (error) {
+            console.log('Could not read log file or create comment:', error.message);
+          }
