@@ -103,7 +103,7 @@ jobs:
         python scripts/import_ratemd_data.py "${{ github.event.inputs.json_file || 'ratemd.json' }}"
         
     - name: Upload logs
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: ratemd-import-logs
