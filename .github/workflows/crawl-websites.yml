@@ -1,0 +1,61 @@
+name: Crawl Facility Websites
+
+on:
+  workflow_dispatch:
+
+jobs:
+  crawl-websites:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Verify JSON file exists
+      run: |
+        if [ ! -f "ratemd.json" ]; then
+          echo "Error: JSON file not found: ratemd.json"
+          echo "Available files:" 
+          ls -la *.json 2>/dev/null || echo "No JSON files found"
+          exit 1
+        fi
+        echo "✓ JSON file found: ratemd.json"
+
+    - name: Test Supabase connection
+      env:
+        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      run: |
+        python -c "
+        import os, sys, asyncio
+        sys.path.append('.')
+        from utils.supabase_client import SupabaseClient
+        async def test():
+            client = SupabaseClient()
+            ok = await client.test_connection()
+            if not ok:
+                raise SystemExit(1)
+            print('✓ Supabase connection successful')
+        asyncio.run(test())
+        "
+
+    - name: Run website crawler
+      env:
+        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        PROXY: ${{ secrets.PROXY }}
+      run: |
+        echo "Starting website crawler..."
+        python website_crawler.py
+
+

@@ -15,10 +15,16 @@ import json
 import logging
 import html as _html
 from typing import List, Dict, Optional
+from urllib.parse import urlparse
 
 import cloudscraper
 from bs4 import BeautifulSoup
 from requests import Response
+from dotenv import load_dotenv
+
+# Supabase client helper
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from utils.supabase_client import SupabaseClient
 
 # -------------------------
 # Logging configuration
@@ -142,6 +148,73 @@ def extract_website_url(detail_url: str) -> str:
     logging.info(f"No website found for {detail_url}")
     return "N/A"
 
+def generate_slug_from_url(detail_url: str) -> Optional[str]:
+    """Generate a slug from the RateMDs detail URL.
+    Uses the last non-empty path segment when available.
+    """
+    if not detail_url:
+        return None
+    try:
+        parsed = urlparse(detail_url)
+        parts = [p for p in parsed.path.strip('/').split('/') if p]
+        if parts:
+            return parts[-1]
+    except Exception:
+        return None
+    return None
+
+def update_facility_website(supabase_client: SupabaseClient, website_url: str, facility: Dict) -> bool:
+    """Update the facility website in Supabase.
+
+    Matching priority:
+    1) slug derived from detail_url
+    2) name + city + province (if available)
+    """
+    if not website_url or website_url == "N/A":
+        return False
+
+    try:
+        client = supabase_client.client
+
+        detail_url = facility.get("detail_url") or ""
+        slug = generate_slug_from_url(detail_url)
+
+        update_data = {"website": website_url}
+
+        # Try match by slug first
+        if slug:
+            resp = (
+                client.table("facilities")
+                .update(update_data)
+                .eq("slug", slug)
+                .execute()
+            )
+            # If updated at least one row, success
+            if getattr(resp, "data", None):
+                return True
+
+        # Fallback: match by name + city + province if provided
+        name = facility.get("name")
+        city = facility.get("city")
+        province = facility.get("province")
+        if name and city and province:
+            resp2 = (
+                client.table("facilities")
+                .update(update_data)
+                .eq("name", name)
+                .eq("city", city)
+                .eq("province", province)
+                .execute()
+            )
+            if getattr(resp2, "data", None):
+                return True
+
+        logging.warning(f"No matching facility found for update (slug={slug}, name={name}, city={city}, province={province})")
+        return False
+    except Exception as e:
+        logging.error(f"Error updating facility website: {e}")
+        return False
+
 def load_facilities(filename: str) -> List[Dict]:
     """Load facilities from JSON file."""
     try:
@@ -163,44 +236,57 @@ def save_facilities(facilities: List[Dict], filename: str):
         logging.error(f"Error saving {filename}: {e}")
 
 def main():
-    """Main function to crawl website URLs for all facilities."""
+    """Main function to crawl website URLs and update Supabase facilities table."""
+    # Load environment variables (SUPABASE_URL, SUPABASE_KEY)
+    load_dotenv()
+
+    # Ensure Supabase env is set
+    if not os.environ.get("SUPABASE_URL") or not os.environ.get("SUPABASE_KEY"):
+        logging.error("SUPABASE_URL and SUPABASE_KEY environment variables are required")
+        return
+
+    # Initialize Supabase client
+    supabase_client = SupabaseClient()
+
     input_file = "ratemd.json"
-    output_file = "ratemd_with_websites.json"
-    
-    # Load existing facilities
+
+    # Load existing facilities from JSON (authoritative list for crawling)
     facilities = load_facilities(input_file)
     if not facilities:
         logging.error("No facilities loaded. Exiting.")
         return
-    
+
     # Process each facility
     total_facilities = len(facilities)
+    updated_count = 0
     for i, facility in enumerate(facilities, 1):
         facility_name = facility.get("name", "Unknown")
         detail_url = facility.get("detail_url", "")
-        
+
         if not detail_url:
             logging.warning(f"Facility {facility_name} has no detail URL. Skipping.")
-            facility["website"] = "N/A"
             continue
-        
+
         logging.info(f"Processing facility {i}/{total_facilities}: {facility_name}")
-        
+
         # Extract website URL
         website_url = extract_website_url(detail_url)
-        facility["website"] = website_url
-        
+
+        # Update Supabase
+        if update_facility_website(supabase_client, website_url, facility):
+            updated_count += 1
+            logging.info(f"Updated website for: {facility_name}")
+        else:
+            logging.info(f"No update applied for: {facility_name}")
+
         # Add delay between requests
         time.sleep(random.uniform(2.0, 5.0))
-        
-        # Save progress every 50 facilities
+
+        # Progress log every 50 facilities
         if i % 50 == 0:
-            logging.info(f"Progress: {i}/{total_facilities} facilities processed")
-            save_facilities(facilities, f"ratemd_with_websites_progress_{i}.json")
-    
-    # Save final result
-    save_facilities(facilities, output_file)
-    logging.info(f"Completed processing all {total_facilities} facilities. Results saved to {output_file}")
+            logging.info(f"Progress: {i}/{total_facilities} processed, {updated_count} updated in DB")
+
+    logging.info(f"Completed processing all {total_facilities} facilities. {updated_count} rows updated in DB")
 
 if __name__ == "__main__":
     main()
